@@ -1,0 +1,2746 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ChronoGrid" />
+  <meta name="theme-color" content="#F8FAFC" />
+  <title>ChronoGrid — Structured風タイムライン × Moto風ヒートマップ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"', 'sans-serif'],
+          },
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    html, body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+      overscroll-behavior-y: contain;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Smooth checkbox pop */
+    @keyframes checkPop {
+      0% { transform: scale(0.85); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .animate-pop { animation: checkPop 0.22s ease-out; }
+
+    /* Heatmap grid */
+    .heatmap-grid {
+      display: grid;
+      grid-template-rows: repeat(7, 1fr);
+      grid-auto-flow: column;
+      gap: 3px;
+    }
+    .heatmap-cell {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      transition: transform 0.12s ease, outline 0.12s ease;
+    }
+    @media (min-width: 640px) {
+      .heatmap-cell {
+        width: 14px;
+        height: 14px;
+        border-radius: 3.5px;
+      }
+    }
+    .heatmap-cell:hover {
+      transform: scale(1.2);
+      z-index: 10;
+    }
+    .mini-heatmap-grid {
+      display: grid;
+      grid-template-rows: repeat(7, 1fr);
+      grid-auto-flow: column;
+      gap: 2.5px;
+    }
+    .mini-heatmap-cell {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+    }
+
+    /* Bottom sheet animation */
+    @keyframes slideUp {
+      from { transform: translateY(24px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-sheet { animation: slideUp 0.2s ease-out; }
+  </style>
+</head>
+<body class="bg-[#F5F5F7] text-slate-900 dark:bg-[#0A0B0F] dark:text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Passcode Lock Screen Overlay -->
+  <div id="lock-screen" class="hidden fixed inset-0 z-[100] bg-[#F5F5F7]/95 dark:bg-[#0A0B0F]/95 backdrop-blur-2xl flex flex-col items-center justify-center px-6 select-none">
+    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center text-white shadow-lg shadow-rose-500/25 mb-4">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h2 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">ChronoGrid はロックされています</h2>
+    <p id="lock-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-6">4桁のパスコードを入力してください</p>
+    <div id="lock-dots" class="flex items-center gap-4 mb-8">
+      <span class="lock-dot w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-700 transition"></span>
+      <span class="lock-dot w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-700 transition"></span>
+      <span class="lock-dot w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-700 transition"></span>
+      <span class="lock-dot w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-700 transition"></span>
+    </div>
+    <div class="grid grid-cols-3 gap-3.5 max-w-[260px] w-full">
+      <button type="button" data-pin-key="1" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">1</button>
+      <button type="button" data-pin-key="2" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">2</button>
+      <button type="button" data-pin-key="3" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">3</button>
+      <button type="button" data-pin-key="4" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">4</button>
+      <button type="button" data-pin-key="5" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">5</button>
+      <button type="button" data-pin-key="6" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">6</button>
+      <button type="button" data-pin-key="7" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">7</button>
+      <button type="button" data-pin-key="8" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">8</button>
+      <button type="button" data-pin-key="9" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">9</button>
+      <div></div>
+      <button type="button" data-pin-key="0" class="pin-key h-14 rounded-2xl bg-white dark:bg-[#15171E] border border-slate-200/80 dark:border-slate-800 text-lg font-bold shadow-xs active:scale-95 transition">0</button>
+      <button type="button" id="btn-pin-del" class="h-14 rounded-2xl bg-slate-200/70 dark:bg-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300 active:scale-95 transition">⌫</button>
+    </div>
+  </div>
+
+  <!-- App Shell (Centered mobile-first container, adapts cleanly to desktop) -->
+  <div id="app-shell" class="w-full max-w-2xl mx-auto flex flex-col min-h-screen bg-[#F5F5F7] dark:bg-[#0A0B0F] relative">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-30 bg-[#F5F5F7]/85 dark:bg-[#0A0B0F]/85 backdrop-blur-xl border-b border-black/[0.05] dark:border-white/[0.06] px-4 pt-3.5 pb-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 via-rose-500 to-orange-400 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-rose-500/25 shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <div class="min-w-0">
+            <h1 id="header-title" class="text-base sm:text-lg font-bold tracking-tight truncate">2026年11月</h1>
+            <p id="header-subtitle" class="text-[11px] text-slate-500 dark:text-slate-400 truncate">今日の予定と習慣</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="btn-quick-sync" type="button" title="GASクラウド同期" class="hidden w-9 h-9 rounded-full bg-white dark:bg-[#15171E] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-2xs transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          </button>
+          <button id="btn-today" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-white dark:bg-[#15171E] border border-black/[0.06] dark:border-white/[0.08] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-2xs transition">
+            今日
+          </button>
+          <button id="btn-theme" type="button" aria-label="テーマ切替" class="w-9 h-9 rounded-full bg-white dark:bg-[#15171E] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-2xs transition">
+            <span id="theme-icon" class="text-sm">🌙</span>
+          </button>
+          <button id="btn-settings" type="button" aria-label="設定とデータ管理" class="w-9 h-9 rounded-full bg-white dark:bg-[#15171E] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-2xs transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button id="btn-primary-add" type="button" class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-full bg-gradient-to-r from-rose-500 to-orange-400 hover:opacity-95 active:scale-95 text-white shadow-sm shadow-rose-500/25 transition flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            <span id="btn-add-label">追加</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Week Strip (Visible on Timeline tab) -->
+      <div id="week-strip-container" class="mt-3">
+        <div class="flex items-center justify-between gap-1">
+          <button id="btn-prev-week" type="button" aria-label="前の週" class="w-7 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition shrink-0">
+            ‹
+          </button>
+          <div id="week-strip" class="grid grid-cols-7 gap-1 flex-1"></div>
+          <button id="btn-next-week" type="button" aria-label="次の週" class="w-7 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition shrink-0">
+            ›
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 px-4 pt-3 pb-24 overflow-x-hidden">
+
+      <!-- TAB 1: TIMELINE (Structured-style) -->
+      <section id="view-timeline" class="space-y-4">
+        <!-- Day / Week / Month Switcher -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="inline-flex items-center bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            <button type="button" data-tmode="day" class="tmode-btn px-3.5 py-1.5 rounded-lg transition">日</button>
+            <button type="button" data-tmode="week" class="tmode-btn px-3.5 py-1.5 rounded-lg transition">週</button>
+            <button type="button" data-tmode="month" class="tmode-btn px-3.5 py-1.5 rounded-lg transition">月</button>
+          </div>
+          <div id="month-nav-controls" class="hidden flex items-center gap-1.5">
+            <button id="btn-prev-month" type="button" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">‹</button>
+            <span id="month-nav-label" class="text-xs font-bold px-1.5 min-w-[84px] text-center">2026年11月</span>
+            <button id="btn-next-month" type="button" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">›</button>
+          </div>
+        </div>
+
+        <!-- Daily Progress Banner -->
+        <div id="daily-progress-banner" class="bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="selected-date-label" class="text-sm font-bold text-slate-800 dark:text-slate-100">11月18日 (水)</span>
+              <span id="today-badge" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-300">TODAY</span>
+            </div>
+            <p id="daily-summary-text" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">0 / 0 タスク完了</p>
+          </div>
+          <div class="flex items-center gap-2.5 shrink-0">
+            <div class="w-24 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div id="daily-progress-bar" class="h-full bg-gradient-to-r from-rose-500 to-orange-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <span id="daily-progress-pct" class="text-xs font-bold text-slate-700 dark:text-slate-200 w-9 text-right">0%</span>
+          </div>
+        </div>
+
+        <!-- Inbox / Unscheduled Tasks Tray -->
+        <div id="inbox-section" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button id="btn-toggle-inbox" type="button" class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📥</span>
+              <span class="text-xs font-bold text-slate-700 dark:text-slate-200">インボックス（時間未定）</span>
+              <span id="inbox-count" class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">0</span>
+            </div>
+            <span id="inbox-chevron" class="text-xs text-slate-400 transition-transform">▾</span>
+          </button>
+          <div id="inbox-list" class="px-3 pb-3 space-y-1.5 border-t border-slate-100 dark:border-slate-800/80 pt-2"></div>
+        </div>
+
+        <!-- Structured Visual Timeline -->
+        <div id="timeline-list" class="space-y-2"></div>
+      </section>
+
+      <!-- TAB 2: HEATMAP (Moto-style) -->
+      <section id="view-heatmap" class="hidden space-y-4">
+        <!-- KPI Summary Row -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">今日の達成</p>
+            <p id="kpi-today" class="text-xl font-bold mt-0.5 text-rose-500">0%</p>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">現在の連続</p>
+            <p id="kpi-streak" class="text-xl font-bold mt-0.5 text-amber-500">0日</p>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">最長連続</p>
+            <p id="kpi-best-streak" class="text-xl font-bold mt-0.5 text-emerald-500">0日</p>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">調子のいい曜日</p>
+            <p id="kpi-best-day" class="text-xl font-bold mt-0.5 text-indigo-500">-</p>
+          </div>
+        </div>
+
+        <!-- Overall Contribution Heatmap Card -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">アクティビティ・ヒートマップ</h2>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">日々の予定＋習慣の達成度（セルをタップで詳細）</p>
+            </div>
+            <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-semibold">
+              <button type="button" data-range="12" class="heatmap-range-btn px-2 py-1 rounded-md transition">3ヶ月</button>
+              <button type="button" data-range="20" class="heatmap-range-btn px-2 py-1 rounded-md transition">5ヶ月</button>
+              <button type="button" data-range="36" class="heatmap-range-btn px-2 py-1 rounded-md transition">9ヶ月</button>
+            </div>
+          </div>
+
+          <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <!-- Day labels -->
+            <div class="grid grid-rows-7 gap-[3px] text-[10px] text-slate-400 font-medium pt-0.5 shrink-0 select-none">
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]">月</span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]"></span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]">水</span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]"></span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]">金</span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]"></span>
+              <span class="h-[12px] sm:h-[14px] leading-[12px] sm:leading-[14px]">日</span>
+            </div>
+            <div id="overall-heatmap-grid" class="heatmap-grid"></div>
+          </div>
+
+          <!-- Legend & Selected Cell Detail -->
+          <div class="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div id="heatmap-selected-info" class="text-xs text-slate-600 dark:text-slate-300 font-medium">
+              セルをタップするとその日の達成状況を表示します
+            </div>
+            <div class="flex items-center gap-1 text-[10px] text-slate-400">
+              <span>少</span>
+              <span class="w-2.5 h-2.5 rounded-sm bg-slate-100 dark:bg-slate-800"></span>
+              <span class="w-2.5 h-2.5 rounded-sm bg-emerald-200 dark:bg-emerald-900"></span>
+              <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 dark:bg-emerald-700"></span>
+              <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 dark:bg-emerald-500"></span>
+              <span class="w-2.5 h-2.5 rounded-sm bg-emerald-600 dark:bg-emerald-400"></span>
+              <span>多</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Moto-style Habit List with Category Filter & Mini Heatmaps -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">習慣トラッカー（Motoスタイル）</h2>
+            <button id="btn-add-habit-inline" type="button" class="text-xs font-semibold text-rose-500 hover:text-rose-600">
+              ＋ 新しい習慣
+            </button>
+          </div>
+          <div id="habit-category-pills" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"></div>
+          <div id="habit-cards-list" class="space-y-2.5"></div>
+        </div>
+      </section>
+
+      <!-- TAB 3: ANALYTICS (Moto Insights) -->
+      <section id="view-analytics" class="hidden space-y-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">直近14日間の達成率推移</h2>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">タイムライン予定と習慣の総合達成率（%）</p>
+          <div class="relative h-56">
+            <canvas id="chart-trend"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">曜日別パフォーマンス</h2>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">どの曜日が一番達成できているかを可視化</p>
+          <div class="relative h-52">
+            <canvas id="chart-weekday"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-3">連続記録ランキング & 節目</h2>
+          <div id="analytics-leaderboard" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- TAB 4: ITSU (Last-Done Tracker) -->
+      <section id="view-itsu" class="hidden space-y-4">
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">登録アイテム</p>
+            <p id="itsu-kpi-total" class="text-xl font-bold mt-0.5 text-slate-800 dark:text-slate-100">0件</p>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">そろそろ時期</p>
+            <p id="itsu-kpi-due" class="text-xl font-bold mt-0.5 text-rose-500">0件</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2">
+          <div id="itsu-category-pills" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 flex-1"></div>
+          <button id="btn-add-itsu-inline" type="button" class="text-xs font-semibold text-rose-500 hover:text-rose-600 shrink-0">
+            ＋ 追加
+          </button>
+        </div>
+
+        <div id="itsu-cards-list" class="space-y-2.5"></div>
+      </section>
+
+    </main>
+
+    <!-- Floating Bottom Tab Dock (iOS Native Pill Style) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-4 pb-3" style="padding-bottom: calc(12px + var(--safe-bottom));">
+      <div class="pointer-events-auto max-w-md mx-auto grid grid-cols-4 h-14 rounded-full bg-white/85 dark:bg-[#15171E]/90 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] shadow-[0_8px_30px_rgba(15,23,42,0.10)] px-1.5">
+        <button type="button" data-tab="timeline" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-rose-500 font-semibold transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span class="text-[10px] tracking-tight">タイムライン</span>
+        </button>
+        <button type="button" data-tab="heatmap" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span class="text-[10px] tracking-tight">ヒートマップ</span>
+        </button>
+        <button type="button" data-tab="itsu" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span class="text-[10px] tracking-tight">いつ？</span>
+        </button>
+        <button type="button" data-tab="analytics" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20v-4"/></svg>
+          <span class="text-[10px] tracking-tight">分析</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- MODAL: Add / Edit Task (Structured style) -->
+  <div id="modal-task" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="modal-sheet w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200 dark:border-slate-800">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-task-title" class="text-base font-bold">新しいタスクを追加</h3>
+        <button type="button" data-close-modal="modal-task" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-800">✕</button>
+      </div>
+      <form id="form-task" class="space-y-4">
+        <input type="hidden" id="task-id" />
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">タイトル</label>
+          <input id="task-title" type="text" required placeholder="例: ラジオ英会話・実験データ整理" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border-0 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
+            <div id="task-icon-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カラー</label>
+            <div id="task-color-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">日付</label>
+            <input id="task-date" type="date" required class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">繰り返し</label>
+            <select id="task-repeat" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
+              <option value="none">繰り返しなし</option>
+              <option value="daily">毎日</option>
+              <option value="weekdays">平日 (月〜金)</option>
+              <option value="weekends">週末 (土日)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-800 px-3.5 py-2.5 rounded-xl">
+          <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">時間を指定する（オフでインボックスへ）</span>
+          <input id="task-has-time" type="checkbox" checked class="w-4 h-4 accent-rose-500" />
+        </div>
+
+        <div id="task-time-fields" class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">開始時刻</label>
+            <input id="task-start" type="time" value="09:00" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">所要時間（分）</label>
+            <select id="task-duration" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
+              <option value="15">15分</option>
+              <option value="30" selected>30分</option>
+              <option value="45">45分</option>
+              <option value="60">1時間 (60分)</option>
+              <option value="90">1時間30分 (90分)</option>
+              <option value="120">2時間 (120分)</option>
+              <option value="180">3時間 (180分)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Moto習慣と連携（任意）</label>
+          <select id="task-habit-link" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
+            <option value="">連携しない</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">サブタスク（1行につき1つ）</label>
+          <textarea id="task-subtasks" rows="2" placeholder="例:&#10;テキストを読む&#10;シャドーイング10分" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button id="btn-delete-task" type="button" class="hidden px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 transition">
+            削除
+          </button>
+          <div class="flex-1 flex justify-end gap-2">
+            <button type="button" data-close-modal="modal-task" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">キャンセル</button>
+            <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 shadow-sm">保存する</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Add / Edit Habit (Moto style) -->
+  <div id="modal-habit" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="modal-sheet w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200 dark:border-slate-800">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-habit-title" class="text-base font-bold">新しい習慣を追加</h3>
+        <button type="button" data-close-modal="modal-habit" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <form id="form-habit" class="space-y-4">
+        <input type="hidden" id="habit-id" />
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">習慣名</label>
+          <input id="habit-name" type="text" required placeholder="例: 英語リスニング / 論文精読" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
+            <div id="habit-icon-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">ヒートマップ色</label>
+            <div id="habit-color-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カテゴリ</label>
+            <input id="habit-category" type="text" value="学習・研究" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">1日の目標数</label>
+            <input id="habit-target" type="number" min="1" max="999" value="1" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">単位</label>
+            <input id="habit-unit" type="text" value="回" placeholder="分 / ページ / 回" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button id="btn-delete-habit" type="button" class="hidden px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/50">削除</button>
+          <div class="flex-1 flex justify-end gap-2">
+            <button type="button" data-close-modal="modal-habit" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">キャンセル</button>
+            <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 shadow-sm">保存する</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Add / Edit Itsu (Last-Done Tracker) -->
+  <div id="modal-itsu" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="modal-sheet w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="modal-itsu-title" class="text-base font-bold">「いつ？」項目を追加</h3>
+        <button type="button" data-close-modal="modal-itsu" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <form id="form-itsu" class="space-y-4">
+        <input type="hidden" id="itsu-id" />
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">項目名</label>
+          <input id="itsu-name" type="text" required placeholder="例: シーツ交換 / 美容院 / フィルター掃除" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
+            <div id="itsu-icon-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カラー</label>
+            <div id="itsu-color-picker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カテゴリ</label>
+            <input id="itsu-category" type="text" value="生活・メンテ" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">最後にやった日</label>
+            <input id="itsu-last-date" type="date" class="w-full px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">目安間隔(日)</label>
+            <input id="itsu-interval" type="number" min="0" max="365" value="14" placeholder="0でなし" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+        </div>
+        <div id="itsu-history-box" class="hidden space-y-1.5">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">過去の記録履歴</p>
+          <div id="itsu-history-list" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto"></div>
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button id="btn-delete-itsu" type="button" class="hidden px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/50">削除</button>
+          <div class="flex-1 flex justify-end gap-2">
+            <button type="button" data-close-modal="modal-itsu" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">キャンセル</button>
+            <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 shadow-sm">保存する</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Settings & iPhone PWA Guide -->
+  <div id="modal-settings" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="modal-sheet w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold">設定・iPhoneへの追加方法</h3>
+        <button type="button" data-close-modal="modal-settings" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+
+      <div class="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-3.5 text-xs space-y-1.5 text-slate-600 dark:text-slate-300">
+        <p class="font-bold text-slate-800 dark:text-slate-100">📱 iPhoneでネイティブアプリのように使う手順</p>
+        <p>1. このHTMLファイルをGitHub Pagesなどにアップロードし、iPhoneのSafariで開きます。</p>
+        <p>2. 画面下部の共有ボタン（□↑）→「ホーム画面に追加」をタップすると、アイコンから全画面で起動できます。</p>
+        <p>3. データは端末のブラウザに自動保存され、下のJSONでバックアップも可能です。</p>
+      </div>
+
+      <div class="space-y-2.5 bg-emerald-50/60 dark:bg-emerald-950/20 p-3.5 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-slate-800 dark:text-slate-100">☁️ 自分専用GAS同期（iPhone/iPad・Gカレンダー）</p>
+          <span id="gas-status-badge" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-500">未設定</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">ご自身のGAS URLと合言葉はこの端末内のみに保存され、公開コードには含まれません。</p>
+        <input id="input-gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs outline-none focus:ring-2 focus:ring-emerald-500" />
+        <input id="input-gas-token" type="password" placeholder="秘密トークン（合言葉）" class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs outline-none focus:ring-2 focus:ring-emerald-500" />
+        <label class="flex items-center gap-2 text-[11px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input id="input-gas-gcal" type="checkbox" checked class="w-3.5 h-3.5 accent-emerald-500 rounded" />
+          <span>同期時にGoogleカレンダーの予定も取得する</span>
+        </label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button id="btn-gas-save" type="button" class="px-2.5 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] font-semibold">設定保存</button>
+          <button id="btn-gas-pull" type="button" class="px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold">⬇️ 読込</button>
+          <button id="btn-gas-push" type="button" class="px-2.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-semibold">⬆️ 保存</button>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-xs font-bold text-slate-700 dark:text-slate-200">📅 Googleカレンダー連携（外部通信ゼロ・.ics）</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">端末内だけで .ics ファイルを変換・取り込みするため、外部に予定が送信されません。</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-export-ics" type="button" class="px-3 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-semibold hover:bg-sky-100 transition">
+            ⬇️ .ics エクスポート
+          </button>
+          <label class="px-3 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-semibold hover:bg-sky-100 transition text-center cursor-pointer">
+            ⬆️ .ics インポート
+            <input id="input-import-ics" type="file" accept=".ics,text/calendar" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-200">🔒 アプリ起動時パスコードロック</p>
+          <span id="passcode-status-badge" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">OFF</span>
+        </div>
+        <div id="passcode-setup-row" class="flex items-center gap-2">
+          <input id="input-passcode-new" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4桁の数字" class="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none focus:ring-2 focus:ring-rose-500" />
+          <button id="btn-save-passcode" type="button" class="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shrink-0">設定する</button>
+        </div>
+        <div id="passcode-active-row" class="hidden grid grid-cols-2 gap-2">
+          <button id="btn-lock-now" type="button" class="px-3 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold">今すぐロック</button>
+          <button id="btn-clear-passcode" type="button" class="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 text-xs font-semibold">ロックを解除</button>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-xs font-bold text-slate-700 dark:text-slate-200">データ管理（全データバックアップ）</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-export-json" type="button" class="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+            ⬇️ JSONバックアップ
+          </button>
+          <label class="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition text-center cursor-pointer">
+            ⬆️ JSONインポート
+            <input id="input-import-json" type="file" accept=".json" class="hidden" />
+          </label>
+        </div>
+        <button id="btn-reset-demo" type="button" class="w-full px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 transition">
+          🔄 サンプルデータに戻す
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold shadow-lg opacity-0 transition-opacity duration-200"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STORAGE_KEY = 'chronogrid_app_v1';
+      const COLORS = [
+        { id: 'rose', label: 'ローズ', hex: '#F43F5E', bg: 'bg-rose-50 dark:bg-rose-950/40', border: 'border-rose-400', badge: 'bg-rose-500', heat: ['#f1f5f9', '#fecdd3', '#fda4af', '#fb7185', '#e11d48'] },
+        { id: 'orange', label: 'オレンジ', hex: '#F97316', bg: 'bg-orange-50 dark:bg-orange-950/40', border: 'border-orange-400', badge: 'bg-orange-500', heat: ['#f1f5f9', '#fed7aa', '#fdba74', '#fb923c', '#ea580c'] },
+        { id: 'amber', label: 'アンバー', hex: '#F59E0B', bg: 'bg-amber-50 dark:bg-amber-950/40', border: 'border-amber-400', badge: 'bg-amber-500', heat: ['#f1f5f9', '#fde68a', '#fcd34d', '#fbbf24', '#d97706'] },
+        { id: 'emerald', label: 'エメラルド', hex: '#10B981', bg: 'bg-emerald-50 dark:bg-emerald-950/40', border: 'border-emerald-400', badge: 'bg-emerald-500', heat: ['#f1f5f9', '#a7f3d0', '#6ee7b7', '#34d399', '#059669'] },
+        { id: 'sky', label: 'スカイ', hex: '#0EA5E9', bg: 'bg-sky-50 dark:bg-sky-950/40', border: 'border-sky-400', badge: 'bg-sky-500', heat: ['#f1f5f9', '#bae6fd', '#7dd3fc', '#38bdf8', '#0284c7'] },
+        { id: 'indigo', label: 'インディゴ', hex: '#6366F1', bg: 'bg-indigo-50 dark:bg-indigo-950/40', border: 'border-indigo-400', badge: 'bg-indigo-500', heat: ['#f1f5f9', '#c7d2fe', '#a5b4fc', '#818cf8', '#4f46e5'] },
+        { id: 'violet', label: 'バイオレット', hex: '#8B5CF6', bg: 'bg-violet-50 dark:bg-violet-950/40', border: 'border-violet-400', badge: 'bg-violet-500', heat: ['#f1f5f9', '#ddd6fe', '#c4b5fd', '#a78bfa', '#7c3aed'] },
+        { id: 'teal', label: 'ティール', hex: '#14B8A6', bg: 'bg-teal-50 dark:bg-teal-950/40', border: 'border-teal-400', badge: 'bg-teal-500', heat: ['#f1f5f9', '#99f6e4', '#5eead4', '#2dd4bf', '#0d9488'] }
+      ];
+      const ICONS = ['🔬', '🎧', '📚', '💻', '🏃', '☕️', '✍️', '🧘', '💧', '🗓️', '⚡', '🎯'];
+      const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+      function toDateStr(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      function parseDateStr(str) {
+        const [y, m, d] = str.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      }
+
+      function addDays(dateStr, delta) {
+        const d = parseDateStr(dateStr);
+        d.setDate(d.getDate() + delta);
+        return toDateStr(d);
+      }
+
+      function getMonday(dateStr) {
+        const d = parseDateStr(dateStr);
+        const day = d.getDay();
+        const diff = (day === 0 ? -6 : 1 - day);
+        d.setDate(d.getDate() + diff);
+        return toDateStr(d);
+      }
+
+      function timeToMins(t) {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      }
+
+      function minsToTime(mins) {
+        const h = Math.floor(mins / 60) % 24;
+        const m = mins % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+
+      function formatDuration(mins) {
+        if (mins < 60) return `${mins}分`;
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+      }
+
+      const TODAY_STR = toDateStr(new Date());
+
+      function createSeedData() {
+        const habits = [
+          { id: 'h1', name: '英語リスニング・音読', icon: '🎧', color: 'sky', category: '学習・語学', target: 20, unit: '分', logs: {} },
+          { id: 'h2', name: '論文・専門書リーディング', icon: '📚', color: 'indigo', category: '研究・仕事', target: 15, unit: 'ページ', logs: {} },
+          { id: 'h3', name: '実験ノート＆振り返り', icon: '🔬', color: 'emerald', category: '研究・仕事', target: 1, unit: '回', logs: {} },
+          { id: 'h4', name: 'ストレッチ＆散歩', icon: '🏃', color: 'orange', category: '健康・ルーティン', target: 1, unit: '回', logs: {} },
+          { id: 'h5', name: '水分補給', icon: '💧', color: 'teal', category: '健康・ルーティン', target: 6, unit: '杯', logs: {} }
+        ];
+
+        // Deterministic rich past 140 days logs for realistic Moto-style heatmap
+        for (let i = 140; i >= 1; i--) {
+          const ds = addDays(TODAY_STR, -i);
+          const dow = parseDateStr(ds).getDay();
+          const seed = (i * 37 + dow * 13) % 100;
+          habits.forEach((h, idx) => {
+            const p = (seed + idx * 19) % 100;
+            if (p > 26) {
+              h.logs[ds] = h.target;
+            } else if (h.target > 1 && p > 12) {
+              h.logs[ds] = Math.max(1, Math.floor(h.target * 0.6));
+            }
+          });
+        }
+        // Today's initial habit progress
+        habits[0].logs[TODAY_STR] = 20;
+        habits[2].logs[TODAY_STR] = 0;
+        habits[4].logs[TODAY_STR] = 4;
+
+        const tasks = [
+          {
+            id: 't1', title: 'モーニングコーヒー & 今日の計画', icon: '☕️', color: 'amber',
+            date: TODAY_STR, start: '07:30', duration: 30, repeat: 'daily',
+            completedDates: { [TODAY_STR]: true }, habitId: '',
+            subtasks: [{ text: 'メール・予定確認', done: true }, { text: '優先タスク3つ決定', done: true }]
+          },
+          {
+            id: 't2', title: 'ラジオ英会話 & シャドーイング', icon: '🎧', color: 'sky',
+            date: TODAY_STR, start: '08:15', duration: 30, repeat: 'weekdays',
+            completedDates: { [TODAY_STR]: true }, habitId: 'h1',
+            subtasks: [{ text: '本文リスニング', done: true }, { text: '単語フラッシュカード', done: true }]
+          },
+          {
+            id: 't3', title: '実験セットアップ & データ計測', icon: '🔬', color: 'emerald',
+            date: TODAY_STR, start: '09:30', duration: 120, repeat: 'none',
+            completedDates: {}, habitId: 'h3',
+            subtasks: [{ text: '機器キャリブレーション', done: true }, { text: '測定データ保存', done: false }]
+          },
+          {
+            id: 't4', title: '論文精読・メモ整理', icon: '📚', color: 'indigo',
+            date: TODAY_STR, start: '13:30', duration: 60, repeat: 'none',
+            completedDates: {}, habitId: 'h2',
+            subtasks: []
+          },
+          {
+            id: 't5', title: '夕方の散歩 & ストレッチ', icon: '🏃', color: 'orange',
+            date: TODAY_STR, start: '17:30', duration: 45, repeat: 'daily',
+            completedDates: {}, habitId: 'h4',
+            subtasks: []
+          },
+          {
+            id: 't6', title: '明日の試薬・備品リスト確認', icon: '✍️', color: 'rose',
+            date: TODAY_STR, start: '', duration: 30, repeat: 'none',
+            completedDates: {}, habitId: '',
+            subtasks: []
+          }
+        ];
+
+        const itsuItems = [
+          { id: 'i1', name: 'シーツ・枕カバー交換', icon: '🛏️', color: 'sky', category: '生活・家事', intervalDays: 7, history: [addDays(TODAY_STR, -5), addDays(TODAY_STR, -12)] },
+          { id: 'i2', name: '実験装置の光学系クリーニング', icon: '🔬', color: 'emerald', category: '研究・メンテ', intervalDays: 14, history: [addDays(TODAY_STR, -16), addDays(TODAY_STR, -30)] },
+          { id: 'i3', name: '美容院・ヘアカット', icon: '✂️', color: 'rose', category: 'ケア・健康', intervalDays: 45, history: [addDays(TODAY_STR, -34), addDays(TODAY_STR, -79)] },
+          { id: 'i4', name: 'エアコン・空気清浄機フィルター', icon: '💨', color: 'indigo', category: '生活・家事', intervalDays: 30, history: [addDays(TODAY_STR, -19)] }
+        ];
+
+        return {
+          theme: 'light',
+          heatmapWeeks: 20,
+          tasks,
+          habits,
+          itsuItems
+        };
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.tasks) && Array.isArray(parsed.habits)) {
+              if (!Array.isArray(parsed.itsuItems)) parsed.itsuItems = createSeedData().itsuItems;
+              return parsed;
+            }
+          }
+        } catch (e) {}
+        return createSeedData();
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+      }
+
+      let state = loadState();
+      let activeTab = 'timeline';
+      let timelineMode = 'day';
+      let selectedDate = TODAY_STR;
+      let weekStart = getMonday(TODAY_STR);
+      let inboxOpen = true;
+      let selectedHabitCategory = 'すべて';
+      let selectedItsuCategory = 'すべて';
+      let formItsuIcon = '🛏️';
+      let formItsuColor = 'sky';
+      let selectedHeatmapDate = TODAY_STR;
+      let trendChart = null;
+      let weekdayChart = null;
+
+      // Form state
+      let formTaskIcon = ICONS[0];
+      let formTaskColor = COLORS[0].id;
+      let formHabitIcon = ICONS[0];
+      let formHabitColor = COLORS[3].id;
+
+      function getColorObj(id) {
+        return COLORS.find(c => c.id === id) || COLORS[0];
+      }
+
+      function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.remove('opacity-0');
+        el.classList.add('opacity-100');
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+          el.classList.remove('opacity-100');
+          el.classList.add('opacity-0');
+        }, 2200);
+      }
+
+      function applyTheme() {
+        const isDark = state.theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+      }
+
+      function taskAppliesToDate(task, dateStr) {
+        if (task.date === dateStr) return true;
+        if (dateStr < task.date) return false;
+        const dow = parseDateStr(dateStr).getDay();
+        if (task.repeat === 'daily') return true;
+        if (task.repeat === 'weekdays') return dow >= 1 && dow <= 5;
+        if (task.repeat === 'weekends') return dow === 0 || dow === 6;
+        return false;
+      }
+
+      function isTaskCompleted(task, dateStr) {
+        return !!(task.completedDates && task.completedDates[dateStr]);
+      }
+
+      function getDayScore(dateStr) {
+        const dayTasks = state.tasks.filter(t => taskAppliesToDate(t, dateStr));
+        const taskDone = dayTasks.filter(t => isTaskCompleted(t, dateStr)).length;
+        const habitTotal = state.habits.length;
+        let habitScoreSum = 0;
+        let habitDone = 0;
+        state.habits.forEach(h => {
+          const val = h.logs[dateStr] || 0;
+          if (val === -1) return; // skipped
+          const ratio = Math.min(1, val / h.target);
+          habitScoreSum += ratio;
+          if (val >= h.target) habitDone++;
+        });
+        const totalItems = dayTasks.length + habitTotal;
+        if (totalItems === 0) return { pct: 0, done: 0, total: 0, level: 0 };
+        const pct = Math.round(((taskDone + habitScoreSum) / totalItems) * 100);
+        let level = 0;
+        if (pct > 0 && pct <= 25) level = 1;
+        else if (pct <= 50) level = 2;
+        else if (pct <= 80) level = 3;
+        else if (pct > 80) level = 4;
+        return { pct, done: taskDone + habitDone, total: totalItems, level };
+      }
+
+      function calcHabitStreak(habit) {
+        let streak = 0;
+        let d = TODAY_STR;
+        // If today not yet completed, check starting from yesterday
+        const todayVal = habit.logs[d] || 0;
+        if (todayVal < habit.target && todayVal !== -1) {
+          d = addDays(d, -1);
+        }
+        for (let i = 0; i < 365; i++) {
+          const val = habit.logs[d] || 0;
+          if (val >= habit.target) {
+            streak++;
+            d = addDays(d, -1);
+          } else if (val === -1) {
+            d = addDays(d, -1); // skipped day preserves streak
+          } else {
+            break;
+          }
+        }
+        return streak;
+      }
+
+      function calcOverallStreaks() {
+        let current = 0;
+        let d = TODAY_STR;
+        if (getDayScore(d).pct < 40) d = addDays(d, -1);
+        for (let i = 0; i < 365; i++) {
+          if (getDayScore(d).pct >= 40) {
+            current++;
+            d = addDays(d, -1);
+          } else break;
+        }
+        let best = 0;
+        let run = 0;
+        for (let i = 200; i >= 0; i--) {
+          const ds = addDays(TODAY_STR, -i);
+          if (getDayScore(ds).pct >= 40) {
+            run++;
+            if (run > best) best = run;
+          } else {
+            run = 0;
+          }
+        }
+        return { current, best };
+      }
+
+      function calcWeekdayAverages() {
+        const sums = [0, 0, 0, 0, 0, 0, 0];
+        const counts = [0, 0, 0, 0, 0, 0, 0];
+        for (let i = 0; i < 60; i++) {
+          const ds = addDays(TODAY_STR, -i);
+          const s = getDayScore(ds);
+          if (s.total > 0) {
+            const dow = parseDateStr(ds).getDay();
+            sums[dow] += s.pct;
+            counts[dow]++;
+          }
+        }
+        return sums.map((sum, i) => counts[i] ? Math.round(sum / counts[i]) : 0);
+      }
+
+      // ================= RENDERING =================
+
+      function renderHeader() {
+        const d = parseDateStr(selectedDate);
+        if (activeTab === 'timeline') {
+          document.getElementById('header-title').textContent = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+          document.getElementById('header-subtitle').textContent = 'タイムライン & デイリープラン';
+          document.getElementById('btn-add-label').textContent = '予定';
+          document.getElementById('week-strip-container').classList.toggle('hidden', timelineMode === 'month');
+          document.getElementById('btn-today').classList.remove('hidden');
+        } else if (activeTab === 'heatmap') {
+          document.getElementById('header-title').textContent = 'ヒートマップ & 習慣';
+          document.getElementById('header-subtitle').textContent = 'Motoスタイルの継続ログ';
+          document.getElementById('btn-add-label').textContent = '習慣';
+          document.getElementById('week-strip-container').classList.add('hidden');
+          document.getElementById('btn-today').classList.add('hidden');
+        } else if (activeTab === 'itsu') {
+          document.getElementById('header-title').textContent = 'いつ？（最後の記録）';
+          document.getElementById('header-subtitle').textContent = '前回やってからの経過日数';
+          document.getElementById('btn-add-label').textContent = '項目';
+          document.getElementById('week-strip-container').classList.add('hidden');
+          document.getElementById('btn-today').classList.add('hidden');
+        } else {
+          document.getElementById('header-title').textContent = 'インサイト & 分析';
+          document.getElementById('header-subtitle').textContent = '達成率と連続記録の推移';
+          document.getElementById('btn-add-label').textContent = '予定';
+          document.getElementById('week-strip-container').classList.add('hidden');
+          document.getElementById('btn-today').classList.add('hidden');
+        }
+      }
+
+      function renderWeekStrip() {
+        const container = document.getElementById('week-strip');
+        container.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const ds = addDays(weekStart, i);
+          const d = parseDateStr(ds);
+          const isSelected = ds === selectedDate;
+          const isToday = ds === TODAY_STR;
+          const score = getDayScore(ds);
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
+            isSelected
+              ? 'bg-rose-500 text-white shadow-sm'
+              : isToday
+                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300'
+                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+          }`;
+
+          const dotColor = isSelected
+            ? 'bg-white'
+            : score.pct >= 80
+              ? 'bg-emerald-500'
+              : score.pct > 0
+                ? 'bg-amber-400'
+                : 'bg-transparent';
+
+          btn.innerHTML = `
+            <span class="text-[10px] font-medium opacity-80">${WEEKDAYS_JA[d.getDay()]}</span>
+            <span class="text-sm font-bold leading-tight mt-0.5">${d.getDate()}</span>
+            <span class="w-1.5 h-1.5 rounded-full mt-1 ${dotColor}"></span>
+          `;
+          btn.addEventListener('click', () => {
+            selectedDate = ds;
+            renderAll();
+          });
+          container.appendChild(btn);
+        }
+      }
+
+      function renderTimeline() {
+        // Update mode buttons
+        document.querySelectorAll('.tmode-btn').forEach(btn => {
+          const active = btn.dataset.tmode === timelineMode;
+          btn.className = `tmode-btn px-3.5 py-1.5 rounded-lg transition ${
+            active ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 dark:text-slate-400'
+          }`;
+        });
+        document.getElementById('month-nav-controls').classList.toggle('hidden', timelineMode !== 'month');
+        document.getElementById('daily-progress-banner').classList.toggle('hidden', timelineMode !== 'day');
+        document.getElementById('inbox-section').classList.toggle('hidden', timelineMode !== 'day');
+
+        if (timelineMode === 'week') {
+          renderWeekTimeline();
+          return;
+        }
+        if (timelineMode === 'month') {
+          renderMonthTimeline();
+          return;
+        }
+
+        const d = parseDateStr(selectedDate);
+        document.getElementById('selected-date-label').textContent =
+          `${d.getMonth() + 1}月${d.getDate()}日 (${WEEKDAYS_JA[d.getDay()]})`;
+        document.getElementById('today-badge').classList.toggle('hidden', selectedDate !== TODAY_STR);
+
+        const dayTasks = state.tasks.filter(t => taskAppliesToDate(t, selectedDate));
+        const inboxTasks = dayTasks.filter(t => !t.start);
+        const scheduledTasks = dayTasks.filter(t => !!t.start).sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+
+        const doneCount = dayTasks.filter(t => isTaskCompleted(t, selectedDate)).length;
+        const pct = dayTasks.length ? Math.round((doneCount / dayTasks.length) * 100) : 0;
+        document.getElementById('daily-summary-text').textContent = `${doneCount} / ${dayTasks.length} タスク完了`;
+        document.getElementById('daily-progress-bar').style.width = `${pct}%`;
+        document.getElementById('daily-progress-pct').textContent = `${pct}%`;
+
+        // Inbox
+        document.getElementById('inbox-count').textContent = inboxTasks.length;
+        const inboxList = document.getElementById('inbox-list');
+        inboxList.classList.toggle('hidden', !inboxOpen);
+        document.getElementById('inbox-chevron').style.transform = inboxOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+        inboxList.innerHTML = '';
+
+        if (inboxTasks.length === 0) {
+          inboxList.innerHTML = `<p class="text-[11px] text-slate-400 py-1 px-1">未割り当てのタスクはありません</p>`;
+        } else {
+          inboxTasks.forEach(task => {
+            const done = isTaskCompleted(task, selectedDate);
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60';
+            row.innerHTML = `
+              <div class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer task-edit-trigger">
+                <button type="button" class="task-check-btn w-5 h-5 rounded-full border-2 flex items-center justify-center text-[11px] shrink-0 transition ${done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'}">
+                  ${done ? '✓' : ''}
+                </button>
+                <span class="text-base shrink-0">${task.icon}</span>
+                <span class="text-xs font-medium truncate ${done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}">${escapeHtml(task.title)}</span>
+              </div>
+              <button type="button" class="task-schedule-btn px-2 py-1 text-[10px] font-semibold rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 shrink-0">時間設定</button>
+            `;
+            row.querySelector('.task-check-btn').addEventListener('click', (e) => {
+              e.stopPropagation();
+              toggleTaskComplete(task.id, selectedDate);
+            });
+            row.querySelector('.task-edit-trigger').addEventListener('click', () => openTaskModal(task));
+            row.querySelector('.task-schedule-btn').addEventListener('click', () => openTaskModal(task, { forceTime: true }));
+            inboxList.appendChild(row);
+          });
+        }
+
+        // Evenly-spaced proportional vertical time-axis timeline
+        const list = document.getElementById('timeline-list');
+        list.innerHTML = '';
+
+        const PX_PER_MIN = 1.05; // 1 hour = 63px (full 24h)
+        const startHour = 0;
+        const endHour = 24;
+
+        const baseMins = startHour * 60;
+        const totalHeight = (endHour - startHour) * 60 * PX_PER_MIN;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-3 overflow-hidden';
+
+        const gridRow = document.createElement('div');
+        gridRow.className = 'flex relative';
+        gridRow.style.height = `${totalHeight + 16}px`;
+
+        // Left evenly-spaced time axis
+        const axis = document.createElement('div');
+        axis.className = 'w-11 shrink-0 relative select-none';
+        for (let h = startHour; h <= endHour; h++) {
+          const lbl = document.createElement('div');
+          lbl.className = 'absolute right-2 text-[10px] font-semibold text-slate-400 -translate-y-1/2';
+          lbl.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 8}px`;
+          lbl.textContent = `${String(h).padStart(2, '0')}:00`;
+          axis.appendChild(lbl);
+        }
+
+        // Right proportional canvas
+        const canvas = document.createElement('div');
+        canvas.className = 'flex-1 relative border-l border-slate-200/70 dark:border-slate-800/70';
+
+        // Hour & half-hour grid lines (clickable to add task at that hour)
+        for (let h = startHour; h < endHour; h++) {
+          const slotTop = (h - startHour) * 60 * PX_PER_MIN + 8;
+          const slot = document.createElement('button');
+          slot.type = 'button';
+          slot.title = `${String(h).padStart(2, '0')}:00 に予定を追加`;
+          slot.className = 'absolute left-0 right-0 border-t border-slate-200/70 dark:border-slate-800/70 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition text-left';
+          slot.style.top = `${slotTop}px`;
+          slot.style.height = `${60 * PX_PER_MIN}px`;
+          slot.innerHTML = '<div class="w-full border-t border-dashed border-slate-100 dark:border-slate-800/50 mt-[36px]"></div>';
+          slot.addEventListener('click', () => openTaskModal(null, { start: `${String(h).padStart(2, '0')}:00` }));
+          canvas.appendChild(slot);
+        }
+        // Bottom closing line
+        const endLine = document.createElement('div');
+        endLine.className = 'absolute left-0 right-0 border-t border-slate-200/70 dark:border-slate-800/70';
+        endLine.style.top = `${(endHour - startHour) * 60 * PX_PER_MIN + 8}px`;
+        canvas.appendChild(endLine);
+
+        // Compute simple overlap columns
+        const placed = scheduledTasks.map(task => {
+          const s = timeToMins(task.start);
+          const e = s + (task.duration || 30);
+          return { task, s, e, col: 0, totalCols: 1 };
+        });
+        for (let i = 0; i < placed.length; i++) {
+          let maxCol = 0;
+          const overlapping = [placed[i]];
+          for (let j = 0; j < placed.length; j++) {
+            if (i === j) continue;
+            if (placed[j].s < placed[i].e && placed[j].e > placed[i].s) {
+              overlapping.push(placed[j]);
+              if (j < i && placed[j].col === placed[i].col) {
+                placed[i].col = placed[j].col + 1;
+              }
+            }
+          }
+          overlapping.forEach(o => { if (o.col > maxCol) maxCol = o.col; });
+          overlapping.forEach(o => { o.totalCols = Math.max(o.totalCols, maxCol + 1); });
+        }
+
+        // Render task blocks proportionally
+        placed.forEach(({ task, s, e, col, totalCols }) => {
+          const color = getColorObj(task.color);
+          const done = isTaskCompleted(task, selectedDate);
+          const linkedHabit = task.habitId ? state.habits.find(h => h.id === task.habitId) : null;
+          const topPx = (s - baseMins) * PX_PER_MIN + 8;
+          const heightPx = Math.max(36, (task.duration || 30) * PX_PER_MIN - 2);
+          const isCompact = heightPx < 58;
+
+          const widthPct = 100 / totalCols;
+          const leftPct = col * widthPct;
+
+          const block = document.createElement('div');
+          block.className = `absolute rounded-xl border-l-4 ${color.border} ${color.bg} border border-slate-200/70 dark:border-slate-800/80 shadow-xs overflow-hidden transition cursor-pointer ${done ? 'opacity-65' : ''}`;
+          block.style.top = `${topPx}px`;
+          block.style.height = `${heightPx}px`;
+          block.style.left = `calc(${leftPct}% + 6px)`;
+          block.style.width = `calc(${widthPct}% - 10px)`;
+          block.style.zIndex = '10';
+
+          block.innerHTML = `
+            <div class="h-full px-2.5 ${isCompact ? 'py-1 flex items-center justify-between gap-2' : 'py-2 flex flex-col justify-between'}">
+              <div class="flex items-start justify-between gap-2 min-w-0 w-full">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                  <span class="${isCompact ? 'text-sm' : 'text-base'} shrink-0">${task.icon}</span>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate ${done ? 'line-through' : ''}">${escapeHtml(task.title)}</h3>
+                    ${!isCompact ? `
+                      <div class="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                        <span>${task.start} - ${minsToTime(e)} (${formatDuration(task.duration)})</span>
+                        ${linkedHabit ? `<span>・🟩 ${escapeHtml(linkedHabit.name)}</span>` : ''}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+                <button type="button" aria-label="完了切替" class="task-check-btn w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] font-bold shrink-0 transition ${
+                  done ? `${color.badge} border-transparent text-white animate-pop` : 'border-slate-300 dark:border-slate-600 bg-white/90 dark:bg-slate-900'
+                }">
+                  ${done ? '✓' : ''}
+                </button>
+              </div>
+              ${!isCompact && heightPx >= 90 && task.subtasks && task.subtasks.length > 0 ? `
+                <div class="mt-1 pt-1 border-t border-slate-200/50 dark:border-slate-700/50 flex flex-wrap gap-x-3 gap-y-0.5 overflow-hidden">
+                  ${task.subtasks.slice(0, 3).map((st, sIdx) => `
+                    <label class="flex items-center gap-1 text-[10px] cursor-pointer" onclick="event.stopPropagation()">
+                      <input type="checkbox" data-subtask-idx="${sIdx}" ${st.done ? 'checked' : ''} class="subtask-cb w-3 h-3 accent-rose-500 rounded" />
+                      <span class="${st.done ? 'line-through text-slate-400' : 'text-slate-600 dark:text-slate-300'} truncate max-w-[140px]">${escapeHtml(st.text)}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+          `;
+
+          block.addEventListener('click', () => openTaskModal(task));
+          block.querySelector('.task-check-btn').addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            toggleTaskComplete(task.id, selectedDate);
+          });
+          block.querySelectorAll('.subtask-cb').forEach(cb => {
+            cb.addEventListener('change', (ev) => {
+              ev.stopPropagation();
+              const sIdx = Number(ev.target.dataset.subtaskIdx);
+              task.subtasks[sIdx].done = ev.target.checked;
+              saveState();
+              renderTimeline();
+            });
+          });
+          canvas.appendChild(block);
+        });
+
+        // Current time indicator line on Today
+        if (selectedDate === TODAY_STR) {
+          const now = new Date();
+          const nowMins = now.getHours() * 60 + now.getMinutes();
+          if (nowMins >= baseMins && nowMins <= endHour * 60) {
+            const nowTop = (nowMins - baseMins) * PX_PER_MIN + 8;
+            const nowLine = document.createElement('div');
+            nowLine.className = 'absolute left-0 right-0 flex items-center pointer-events-none z-20 -translate-y-1/2';
+            nowLine.style.top = `${nowTop}px`;
+            nowLine.innerHTML = `
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500 -ml-1.5 shadow-xs"></span>
+              <div class="flex-1 h-0.5 bg-rose-500"></div>
+            `;
+            canvas.appendChild(nowLine);
+          }
+        }
+
+        gridRow.appendChild(axis);
+        gridRow.appendChild(canvas);
+        wrapper.appendChild(gridRow);
+        list.appendChild(wrapper);
+      }
+
+      function renderWeekTimeline() {
+        const list = document.getElementById('timeline-list');
+        list.innerHTML = '';
+
+        const PX_PER_MIN = 0.75; // 1 hour = 45px (full 24h)
+        const startHour = 0;
+        const endHour = 24;
+        const baseMins = startHour * 60;
+        const totalHeight = (endHour - startHour) * 60 * PX_PER_MIN;
+
+        const days = [];
+        for (let i = 0; i < 7; i++) days.push(addDays(weekStart, i));
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-x-auto no-scrollbar';
+
+        const inner = document.createElement('div');
+        inner.className = 'min-w-[560px] p-2.5';
+
+        // Day headers
+        const headerRow = document.createElement('div');
+        headerRow.className = 'flex items-center border-b border-slate-200/70 dark:border-slate-800/70 pb-2 mb-1';
+        headerRow.innerHTML = '<div class="w-10 shrink-0"></div>';
+        const colsHeader = document.createElement('div');
+        colsHeader.className = 'flex-1 grid grid-cols-7 gap-1';
+        days.forEach(ds => {
+          const d = parseDateStr(ds);
+          const isToday = ds === TODAY_STR;
+          const isSel = ds === selectedDate;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `py-1 rounded-lg text-center transition ${
+            isToday ? 'bg-rose-500 text-white' : isSel ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`;
+          btn.innerHTML = `<div class="text-[10px] opacity-80">${WEEKDAYS_JA[d.getDay()]}</div><div class="text-xs font-bold">${d.getDate()}</div>`;
+          btn.addEventListener('click', () => {
+            selectedDate = ds;
+            timelineMode = 'day';
+            renderAll();
+          });
+          colsHeader.appendChild(btn);
+        });
+        headerRow.appendChild(colsHeader);
+        inner.appendChild(headerRow);
+
+        // Time grid body
+        const bodyRow = document.createElement('div');
+        bodyRow.className = 'flex relative';
+        bodyRow.style.height = `${totalHeight + 12}px`;
+
+        const axis = document.createElement('div');
+        axis.className = 'w-10 shrink-0 relative select-none';
+        for (let h = startHour; h <= endHour; h++) {
+          const lbl = document.createElement('div');
+          lbl.className = 'absolute right-1.5 text-[9px] font-semibold text-slate-400 -translate-y-1/2';
+          lbl.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 6}px`;
+          lbl.textContent = `${String(h).padStart(2, '0')}:00`;
+          axis.appendChild(lbl);
+        }
+
+        const gridCols = document.createElement('div');
+        gridCols.className = 'flex-1 grid grid-cols-7 relative border-l border-slate-200/70 dark:border-slate-800/70';
+
+        // Horizontal hour lines spanning all 7 cols
+        for (let h = startHour; h <= endHour; h++) {
+          const line = document.createElement('div');
+          line.className = 'absolute left-0 right-0 border-t border-slate-200/60 dark:border-slate-800/60 pointer-events-none';
+          line.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 6}px`;
+          gridCols.appendChild(line);
+        }
+
+        days.forEach(ds => {
+          const col = document.createElement('div');
+          col.className = 'relative border-r border-slate-100 dark:border-slate-800/50 last:border-r-0';
+
+          // Clickable hour slots
+          for (let h = startHour; h < endHour; h++) {
+            const slot = document.createElement('button');
+            slot.type = 'button';
+            slot.className = 'absolute left-0 right-0 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition';
+            slot.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 6}px`;
+            slot.style.height = `${60 * PX_PER_MIN}px`;
+            slot.addEventListener('click', () => {
+              selectedDate = ds;
+              openTaskModal(null, { start: `${String(h).padStart(2, '0')}:00` });
+            });
+            col.appendChild(slot);
+          }
+
+          const dayTasks = state.tasks.filter(t => t.start && taskAppliesToDate(t, ds));
+          dayTasks.forEach(task => {
+            const s = timeToMins(task.start);
+            const dur = task.duration || 30;
+            if (s < baseMins || s >= endHour * 60) return;
+            const color = getColorObj(task.color);
+            const done = isTaskCompleted(task, ds);
+            const topPx = (s - baseMins) * PX_PER_MIN + 6;
+            const heightPx = Math.max(22, dur * PX_PER_MIN - 2);
+
+            const block = document.createElement('div');
+            block.className = `absolute left-0.5 right-0.5 rounded-lg border-l-2 ${color.border} ${color.bg} px-1 py-0.5 overflow-hidden cursor-pointer shadow-2xs z-10 ${done ? 'opacity-55' : ''}`;
+            block.style.top = `${topPx}px`;
+            block.style.height = `${heightPx}px`;
+            block.innerHTML = `
+              <div class="text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate ${done ? 'line-through' : ''}">
+                ${task.icon} ${escapeHtml(task.title)}
+              </div>
+              ${heightPx >= 34 ? `<div class="text-[8px] text-slate-500 dark:text-slate-400 truncate">${task.start}</div>` : ''}
+            `;
+            block.addEventListener('click', (e) => {
+              e.stopPropagation();
+              selectedDate = ds;
+              openTaskModal(task);
+            });
+            col.appendChild(block);
+          });
+
+          if (ds === TODAY_STR) {
+            const now = new Date();
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            if (nowMins >= baseMins && nowMins <= endHour * 60) {
+              const nl = document.createElement('div');
+              nl.className = 'absolute left-0 right-0 h-0.5 bg-rose-500 pointer-events-none z-20';
+              nl.style.top = `${(nowMins - baseMins) * PX_PER_MIN + 6}px`;
+              col.appendChild(nl);
+            }
+          }
+
+          gridCols.appendChild(col);
+        });
+
+        bodyRow.appendChild(axis);
+        bodyRow.appendChild(gridCols);
+        inner.appendChild(bodyRow);
+        wrapper.appendChild(inner);
+        list.appendChild(wrapper);
+      }
+
+      function renderMonthTimeline() {
+        const list = document.getElementById('timeline-list');
+        list.innerHTML = '';
+
+        const d = parseDateStr(selectedDate);
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        document.getElementById('month-nav-label').textContent = `${year}年${month + 1}月`;
+
+        const firstDay = new Date(year, month, 1);
+        const startOffset = (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1);
+        const gridStart = addDays(toDateStr(firstDay), -startOffset);
+
+        const card = document.createElement('div');
+        card.className = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-3';
+
+        const dowHeader = document.createElement('div');
+        dowHeader.className = 'grid grid-cols-7 gap-1 pb-2 text-center text-[10px] font-bold text-slate-400';
+        ['月', '火', '水', '木', '金', '土', '日'].forEach(lbl => {
+          dowHeader.innerHTML += `<div>${lbl}</div>`;
+        });
+        card.appendChild(dowHeader);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-7 gap-1';
+
+        for (let i = 0; i < 42; i++) {
+          const ds = addDays(gridStart, i);
+          const cd = parseDateStr(ds);
+          const inMonth = cd.getMonth() === month;
+          const isToday = ds === TODAY_STR;
+          const isSel = ds === selectedDate;
+          const dayTasks = state.tasks.filter(t => taskAppliesToDate(t, ds)).sort((a, b) => timeToMins(a.start || '23:59') - timeToMins(b.start || '23:59'));
+
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.className = `min-h-[68px] p-1 rounded-xl border text-left flex flex-col gap-0.5 transition overflow-hidden ${
+            isSel
+              ? 'border-rose-500 bg-rose-50/40 dark:bg-rose-950/30'
+              : 'border-slate-100 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+          } ${inMonth ? '' : 'opacity-40'}`;
+
+          const numBadge = isToday
+            ? `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold">${cd.getDate()}</span>`
+            : `<span class="text-[11px] font-bold px-0.5 ${isSel ? 'text-rose-600 dark:text-rose-300' : 'text-slate-700 dark:text-slate-200'}">${cd.getDate()}</span>`;
+
+          let pillsHtml = '';
+          dayTasks.slice(0, 2).forEach(t => {
+            const c = getColorObj(t.color);
+            const done = isTaskCompleted(t, ds);
+            pillsHtml += `<div class="w-full px-1 py-0.5 rounded text-[8px] font-semibold truncate border-l-2 ${c.border} ${c.bg} ${done ? 'line-through opacity-60' : 'text-slate-700 dark:text-slate-200'}">${t.start ? t.start + ' ' : ''}${escapeHtml(t.title)}</div>`;
+          });
+          if (dayTasks.length > 2) {
+            pillsHtml += `<div class="text-[8px] font-bold text-slate-400 px-0.5">+${dayTasks.length - 2}件</div>`;
+          }
+
+          cell.innerHTML = `<div>${numBadge}</div><div class="w-full space-y-0.5 mt-0.5">${pillsHtml}</div>`;
+          cell.addEventListener('click', () => {
+            selectedDate = ds;
+            weekStart = getMonday(ds);
+            renderAll();
+          });
+          grid.appendChild(cell);
+        }
+        card.appendChild(grid);
+        list.appendChild(card);
+
+        // Selected day quick preview below month grid
+        const selD = parseDateStr(selectedDate);
+        const selTasks = state.tasks.filter(t => taskAppliesToDate(t, selectedDate)).sort((a, b) => timeToMins(a.start || '23:59') - timeToMins(b.start || '23:59'));
+        const preview = document.createElement('div');
+        preview.className = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-3.5 space-y-2.5';
+        preview.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-xs font-bold text-slate-800 dark:text-slate-100">${selD.getMonth() + 1}月${selD.getDate()}日 (${WEEKDAYS_JA[selD.getDay()]}) の予定（${selTasks.length}件）</h3>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btn-month-open-day" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-700 dark:text-slate-200">日表示へ</button>
+              <button type="button" id="btn-month-add-task" class="px-2.5 py-1 rounded-lg bg-rose-500 text-[11px] font-semibold text-white">＋ 追加</button>
+            </div>
+          </div>
+          <div id="month-preview-list" class="space-y-1.5"></div>
+        `;
+        list.appendChild(preview);
+
+        document.getElementById('btn-month-open-day').addEventListener('click', () => {
+          timelineMode = 'day';
+          renderAll();
+        });
+        document.getElementById('btn-month-add-task').addEventListener('click', () => openTaskModal());
+
+        const pList = document.getElementById('month-preview-list');
+        if (selTasks.length === 0) {
+          pList.innerHTML = '<p class="text-[11px] text-slate-400">この日の予定はありません</p>';
+        } else {
+          selTasks.forEach(t => {
+            const c = getColorObj(t.color);
+            const done = isTaskCompleted(t, selectedDate);
+            const item = document.createElement('div');
+            item.className = `flex items-center justify-between gap-2 p-2 rounded-xl border-l-4 ${c.border} ${c.bg} cursor-pointer`;
+            item.innerHTML = `
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-sm">${t.icon}</span>
+                <span class="text-xs font-bold truncate ${done ? 'line-through opacity-60' : ''}">${escapeHtml(t.title)}</span>
+              </div>
+              <span class="text-[10px] font-semibold text-slate-500 shrink-0">${t.start || '未定'}</span>
+            `;
+            item.addEventListener('click', () => openTaskModal(t));
+            pList.appendChild(item);
+          });
+        }
+      }
+
+      function renderHeatmapView() {
+        const todayScore = getDayScore(TODAY_STR);
+        const streaks = calcOverallStreaks();
+        const weekdayAvgs = calcWeekdayAverages();
+        let bestDow = 0;
+        weekdayAvgs.forEach((v, i) => { if (v > weekdayAvgs[bestDow]) bestDow = i; });
+
+        document.getElementById('kpi-today').textContent = `${todayScore.pct}%`;
+        document.getElementById('kpi-streak').textContent = `${streaks.current}日`;
+        document.getElementById('kpi-best-streak').textContent = `${streaks.best}日`;
+        document.getElementById('kpi-best-day').textContent = `${WEEKDAYS_JA[bestDow]}曜日`;
+
+        // Range buttons
+        document.querySelectorAll('.heatmap-range-btn').forEach(btn => {
+          const w = Number(btn.dataset.range);
+          const active = w === state.heatmapWeeks;
+          btn.className = `heatmap-range-btn px-2 py-1 rounded-md transition ${
+            active ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 dark:text-slate-400'
+          }`;
+        });
+
+        // Overall heatmap grid
+        const grid = document.getElementById('overall-heatmap-grid');
+        grid.innerHTML = '';
+        const endMonday = getMonday(TODAY_STR);
+        const startStr = addDays(endMonday, -(state.heatmapWeeks - 1) * 7);
+        const totalCells = state.heatmapWeeks * 7;
+
+        const levelClasses = [
+          'bg-slate-100 dark:bg-slate-800',
+          'bg-emerald-200 dark:bg-emerald-900',
+          'bg-emerald-400 dark:bg-emerald-700',
+          'bg-emerald-500 dark:bg-emerald-500',
+          'bg-emerald-600 dark:bg-emerald-400'
+        ];
+
+        for (let i = 0; i < totalCells; i++) {
+          const ds = addDays(startStr, i);
+          const isFuture = ds > TODAY_STR;
+          const score = isFuture ? { pct: 0, done: 0, total: 0, level: 0 } : getDayScore(ds);
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.title = `${ds}: ${score.pct}%`;
+          cell.className = `heatmap-cell ${isFuture ? 'bg-slate-50 dark:bg-slate-900 opacity-40' : levelClasses[score.level]} ${
+            ds === selectedHeatmapDate ? 'ring-2 ring-rose-500 ring-offset-1 dark:ring-offset-slate-900' : ''
+          }`;
+          cell.addEventListener('click', () => {
+            selectedHeatmapDate = ds;
+            updateHeatmapDetail(ds);
+            renderHeatmapView();
+          });
+          grid.appendChild(cell);
+        }
+        updateHeatmapDetail(selectedHeatmapDate);
+
+        // Categories
+        const categories = ['すべて', ...new Set(state.habits.map(h => h.category || 'その他'))];
+        const catContainer = document.getElementById('habit-category-pills');
+        catContainer.innerHTML = '';
+        categories.forEach(cat => {
+          const active = cat === selectedHabitCategory;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition ${
+            active
+              ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+          }`;
+          btn.textContent = cat;
+          btn.addEventListener('click', () => {
+            selectedHabitCategory = cat;
+            renderHeatmapView();
+          });
+          catContainer.appendChild(btn);
+        });
+
+        // Habit cards
+        const cardsContainer = document.getElementById('habit-cards-list');
+        cardsContainer.innerHTML = '';
+        const filteredHabits = selectedHabitCategory === 'すべて'
+          ? state.habits
+          : state.habits.filter(h => (h.category || 'その他') === selectedHabitCategory);
+
+        if (filteredHabits.length === 0) {
+          cardsContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">このカテゴリの習慣はまだありません</p>`;
+          return;
+        }
+
+        filteredHabits.forEach(habit => {
+          const color = getColorObj(habit.color);
+          const todayVal = habit.logs[TODAY_STR] || 0;
+          const isSkipped = todayVal === -1;
+          const isDone = todayVal >= habit.target;
+          const streak = calcHabitStreak(habit);
+          const step = habit.target >= 20 ? 5 : 1;
+          const todayPct = isSkipped ? 100 : Math.min(100, Math.round((Math.max(0, todayVal) / habit.target) * 100));
+
+          // 30-day completion rate
+          let done30 = 0;
+          let active30 = 0;
+          for (let k = 0; k < 30; k++) {
+            const ds30 = addDays(TODAY_STR, -k);
+            const v30 = habit.logs[ds30] || 0;
+            if (v30 === -1) continue;
+            active30++;
+            if (v30 >= habit.target) done30++;
+          }
+          const rate30 = active30 ? Math.round((done30 / active30) * 100) : 0;
+
+          // Last 7 days dots (Moto-style recent days strip)
+          let recent7Html = '';
+          for (let k = 6; k >= 0; k--) {
+            const ds7 = addDays(TODAY_STR, -k);
+            const d7 = parseDateStr(ds7);
+            const v7 = habit.logs[ds7] || 0;
+            const dotBg = v7 >= habit.target ? color.hex : v7 === -1 ? '#94a3b8' : v7 > 0 ? color.heat[2] : (state.theme === 'dark' ? '#1e293b' : '#e2e8f0');
+            recent7Html += `
+              <div class="flex flex-col items-center gap-0.5">
+                <span class="text-[8px] font-semibold ${k === 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}">${WEEKDAYS_JA[d7.getDay()]}</span>
+                <span class="w-2.5 h-2.5 rounded-full transition" style="background-color:${dotBg}"></span>
+              </div>
+            `;
+          }
+
+          // Edge-to-edge 18-week responsive heatmap (18 columns x 7 rows = 126 days)
+          const weeksCount = 18;
+          const miniEndMon = getMonday(TODAY_STR);
+          const miniStart = addDays(miniEndMon, -(weeksCount - 1) * 7);
+          let miniCellsHtml = '';
+          const isDark = state.theme === 'dark';
+          for (let i = 0; i < weeksCount * 7; i++) {
+            const ds = addDays(miniStart, i);
+            const val = habit.logs[ds] || 0;
+            let bg = isDark ? 'rgba(30,41,59,0.85)' : '#f1f5f9';
+            if (ds <= TODAY_STR && val > 0) {
+              const ratio = val / habit.target;
+              const lvl = ratio >= 1 ? 4 : ratio >= 0.65 ? 3 : ratio >= 0.35 ? 2 : 1;
+              bg = color.heat[lvl];
+            } else if (ds <= TODAY_STR && val === -1) {
+              bg = isDark ? 'rgba(100,116,139,0.35)' : '#e2e8f0';
+            }
+            const opacity = ds > TODAY_STR ? 'opacity-25' : '';
+            const ring = ds === TODAY_STR ? 'ring-1 ring-slate-400 dark:ring-slate-500' : '';
+            miniCellsHtml += `<span class="w-full aspect-square rounded-[3px] ${opacity} ${ring}" style="background-color:${bg}" title="${ds}: ${val === -1 ? '休み' : `${val}/${habit.target}${habit.unit}`}"></span>`;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'bg-white dark:bg-slate-900 rounded-3xl p-4 border border-slate-200/70 dark:border-slate-800/90 shadow-sm hover:shadow-md transition space-y-3';
+
+          card.innerHTML = `
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer habit-edit-trigger">
+                <div class="w-11 h-11 rounded-2xl ${color.bg} border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center text-xl shrink-0 shadow-2xs">${habit.icon}</div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(habit.name)}</h3>
+                    <span class="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px] font-semibold text-slate-500 dark:text-slate-400">${escapeHtml(habit.category)}</span>
+                  </div>
+                  <div class="flex items-center gap-2.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span class="font-bold text-amber-500">🔥 ${streak}日</span>
+                    <span>30日達成率 <strong class="text-slate-700 dark:text-slate-200">${rate30}%</strong></span>
+                    <span>${isSkipped ? '今日: 休み' : `${todayVal}/${habit.target}${habit.unit}`}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" class="habit-skip-btn w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition" title="今日はお休み">
+                  ${isSkipped ? '↩︎' : '休'}
+                </button>
+                <button type="button" class="habit-log-btn h-9 px-3.5 rounded-full text-xs font-bold text-white shadow-sm transition active:scale-95 flex items-center gap-1 ${
+                  isDone ? 'bg-emerald-500' : ''
+                }" style="${isDone ? '' : `background-color:${color.hex}`}">
+                  ${isDone ? '✓ 完了' : habit.target > 1 ? `＋${step}${habit.unit}` : '✓'}
+                </button>
+              </div>
+            </div>
+
+            <!-- Thin progress bar + 7-day recent dots -->
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-300" style="width:${todayPct}%; background-color:${isSkipped ? '#94a3b8' : color.hex}"></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                ${recent7Html}
+              </div>
+            </div>
+
+            <!-- Edge-to-edge Moto-style Heatmap -->
+            <div class="grid grid-rows-7 grid-flow-col gap-[3px] w-full pt-0.5">
+              ${miniCellsHtml}
+            </div>
+          `;
+
+          card.querySelector('.habit-edit-trigger').addEventListener('click', () => openHabitModal(habit));
+          card.querySelector('.habit-skip-btn').addEventListener('click', () => {
+            habit.logs[TODAY_STR] = isSkipped ? 0 : -1;
+            saveState();
+            renderHeatmapView();
+          });
+          card.querySelector('.habit-log-btn').addEventListener('click', () => {
+            const cur = habit.logs[TODAY_STR] || 0;
+            if (cur === -1) habit.logs[TODAY_STR] = 1;
+            else if (habit.target === 1) habit.logs[TODAY_STR] = cur >= 1 ? 0 : 1;
+            else {
+              const step = habit.target >= 20 ? 5 : 1;
+              habit.logs[TODAY_STR] = cur >= habit.target ? 0 : Math.min(habit.target, cur + step);
+            }
+            saveState();
+            renderHeatmapView();
+          });
+
+          cardsContainer.appendChild(card);
+        });
+      }
+
+      function updateHeatmapDetail(ds) {
+        const d = parseDateStr(ds);
+        const s = getDayScore(ds);
+        document.getElementById('heatmap-selected-info').textContent =
+          `${d.getMonth() + 1}月${d.getDate()}日 (${WEEKDAYS_JA[d.getDay()]}) — 達成率 ${s.pct}%`;
+      }
+
+      function daysBetween(fromStr, toStr) {
+        const a = parseDateStr(fromStr);
+        const b = parseDateStr(toStr);
+        return Math.round((b - a) / 86400000);
+      }
+
+      function formatElapsedJa(days) {
+        if (days === 0) return '今日';
+        if (days === 1) return '昨日';
+        if (days < 30) return `${days}日前`;
+        const months = Math.floor(days / 30);
+        const rem = days % 30;
+        return rem === 0 ? `${months}ヶ月前` : `${months}ヶ月${rem}日前`;
+      }
+
+      function renderItsuView() {
+        const items = state.itsuItems || [];
+        let dueCount = 0;
+        items.forEach(it => {
+          const last = it.history && it.history[0];
+          if (it.intervalDays > 0 && last) {
+            if (daysBetween(last, TODAY_STR) >= it.intervalDays) dueCount++;
+          }
+        });
+        document.getElementById('itsu-kpi-total').textContent = `${items.length}件`;
+        document.getElementById('itsu-kpi-due').textContent = `${dueCount}件`;
+
+        const cats = ['すべて', ...new Set(items.map(i => i.category || 'その他'))];
+        const catEl = document.getElementById('itsu-category-pills');
+        catEl.innerHTML = '';
+        cats.forEach(cat => {
+          const active = cat === selectedItsuCategory;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition ${
+            active ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+          }`;
+          btn.textContent = cat;
+          btn.addEventListener('click', () => {
+            selectedItsuCategory = cat;
+            renderItsuView();
+          });
+          catEl.appendChild(btn);
+        });
+
+        const list = document.getElementById('itsu-cards-list');
+        list.innerHTML = '';
+        const filtered = selectedItsuCategory === 'すべて'
+          ? items
+          : items.filter(i => (i.category || 'その他') === selectedItsuCategory);
+
+        if (filtered.length === 0) {
+          list.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">項目がありません。「＋ 追加」から登録できます。</p>`;
+          return;
+        }
+
+        // Sort: overdue / longest elapsed first
+        const sorted = [...filtered].sort((a, b) => {
+          const la = a.history && a.history[0] ? daysBetween(a.history[0], TODAY_STR) : 9999;
+          const lb = b.history && b.history[0] ? daysBetween(b.history[0], TODAY_STR) : 9999;
+          return lb - la;
+        });
+
+        sorted.forEach(item => {
+          const color = getColorObj(item.color);
+          const last = item.history && item.history[0] ? item.history[0] : '';
+          const elapsed = last ? daysBetween(last, TODAY_STR) : null;
+          const isOverdue = item.intervalDays > 0 && elapsed !== null && elapsed >= item.intervalDays;
+          const pct = item.intervalDays > 0 && elapsed !== null
+            ? Math.min(100, Math.round((elapsed / item.intervalDays) * 100))
+            : 0;
+
+          const card = document.createElement('div');
+          card.className = 'bg-white dark:bg-slate-900 rounded-3xl p-4 border border-slate-200/70 dark:border-slate-800/90 shadow-sm space-y-2.5';
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer itsu-edit-trigger">
+                <div class="w-11 h-11 rounded-2xl ${color.bg} border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center text-xl shrink-0">${item.icon}</div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(item.name)}</h3>
+                    ${isOverdue ? '<span class="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-300 text-[9px] font-bold">そろそろ</span>' : ''}
+                  </div>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    ${last ? `最終: ${last.replace(/-/g, '/')}` : 'まだ記録がありません'}
+                    ${item.intervalDays > 0 ? ` ・ 目安 ${item.intervalDays}日ごと` : ''}
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <div class="text-right">
+                  <div class="text-sm font-bold ${isOverdue ? 'text-rose-500' : 'text-slate-800 dark:text-slate-100'}">
+                    ${elapsed === null ? '未記録' : formatElapsedJa(elapsed)}
+                  </div>
+                </div>
+                <button type="button" class="itsu-done-btn h-9 px-3 rounded-full text-xs font-bold text-white shadow-sm transition active:scale-95" style="background-color:${elapsed === 0 ? '#10B981' : color.hex}">
+                  ${elapsed === 0 ? '✓ 済' : '今日やった'}
+                </button>
+              </div>
+            </div>
+            ${item.intervalDays > 0 ? `
+              <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-300" style="width:${pct}%; background-color:${isOverdue ? '#F43F5E' : color.hex}"></div>
+              </div>
+            ` : ''}
+          `;
+
+          card.querySelector('.itsu-edit-trigger').addEventListener('click', () => openItsuModal(item));
+          card.querySelector('.itsu-done-btn').addEventListener('click', () => {
+            if (!item.history) item.history = [];
+            if (item.history[0] !== TODAY_STR) {
+              item.history = [TODAY_STR, ...item.history.filter(d => d !== TODAY_STR)].sort((a, b) => b.localeCompare(a));
+              saveState();
+              renderItsuView();
+              showToast(`「${item.name}」を今日で記録しました`);
+            }
+          });
+          list.appendChild(card);
+        });
+      }
+
+      function openItsuModal(item = null) {
+        const modal = document.getElementById('modal-itsu');
+        document.getElementById('modal-itsu-title').textContent = item ? '「いつ？」項目を編集' : '「いつ？」項目を追加';
+        document.getElementById('itsu-id').value = item ? item.id : '';
+        document.getElementById('itsu-name').value = item ? item.name : '';
+        document.getElementById('itsu-category').value = item ? item.category : '生活・メンテ';
+        document.getElementById('itsu-last-date').value = item && item.history && item.history[0] ? item.history[0] : TODAY_STR;
+        document.getElementById('itsu-interval').value = item ? item.intervalDays : 14;
+
+        const itsuIcons = ['🛏️', '🔬', '✂️', '💨', '🦷', '🧹', '🪴', '🚗', '💻', '🧴', '📦', '🩺'];
+        formItsuIcon = item ? item.icon : itsuIcons[0];
+        formItsuColor = item ? item.color : COLORS[4].id;
+        renderPicker('itsu-icon-picker', itsuIcons, formItsuIcon, false, v => { formItsuIcon = v; });
+        renderPicker('itsu-color-picker', COLORS, formItsuColor, true, v => { formItsuColor = v; });
+
+        const histBox = document.getElementById('itsu-history-box');
+        const histList = document.getElementById('itsu-history-list');
+        if (item && item.history && item.history.length > 0) {
+          histBox.classList.remove('hidden');
+          histList.innerHTML = item.history.map(d => `<span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-medium">${d.replace(/-/g, '/')}</span>`).join('');
+        } else {
+          histBox.classList.add('hidden');
+        }
+
+        document.getElementById('btn-delete-itsu').classList.toggle('hidden', !item);
+        modal.classList.remove('hidden');
+      }
+
+      document.getElementById('btn-add-itsu-inline').addEventListener('click', () => openItsuModal());
+
+      document.getElementById('form-itsu').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('itsu-id').value;
+        const existing = id ? state.itsuItems.find(i => i.id === id) : null;
+        const lastDate = document.getElementById('itsu-last-date').value;
+        let history = existing && existing.history ? [...existing.history] : [];
+        if (lastDate && !history.includes(lastDate)) {
+          history.unshift(lastDate);
+        } else if (lastDate && history[0] !== lastDate) {
+          history = [lastDate, ...history.filter(d => d !== lastDate)];
+        }
+        history.sort((a, b) => b.localeCompare(a));
+
+        const payload = {
+          id: id || 'i_' + Date.now(),
+          name: document.getElementById('itsu-name').value.trim(),
+          icon: formItsuIcon,
+          color: formItsuColor,
+          category: document.getElementById('itsu-category').value.trim() || 'その他',
+          intervalDays: Math.max(0, Number(document.getElementById('itsu-interval').value) || 0),
+          history
+        };
+        if (existing) {
+          Object.assign(existing, payload);
+        } else {
+          state.itsuItems.push(payload);
+        }
+        saveState();
+        document.getElementById('modal-itsu').classList.add('hidden');
+        renderItsuView();
+        showToast('記録を保存しました');
+      });
+
+      document.getElementById('btn-delete-itsu').addEventListener('click', () => {
+        const id = document.getElementById('itsu-id').value;
+        state.itsuItems = state.itsuItems.filter(i => i.id !== id);
+        saveState();
+        document.getElementById('modal-itsu').classList.add('hidden');
+        renderItsuView();
+        showToast('項目を削除しました');
+      });
+
+      function renderAnalytics() {
+        const labels = [];
+        const data = [];
+        for (let i = 13; i >= 0; i--) {
+          const ds = addDays(TODAY_STR, -i);
+          const d = parseDateStr(ds);
+          labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+          data.push(getDayScore(ds).pct);
+        }
+
+        const isDark = state.theme === 'dark';
+        const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(148,163,184,0.2)';
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(document.getElementById('chart-trend'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: '達成率 (%)',
+              data,
+              borderColor: '#F43F5E',
+              backgroundColor: 'rgba(244,63,94,0.12)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
+              x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
+            }
+          }
+        });
+
+        const weekdayAvgs = calcWeekdayAverages();
+        // Reorder Mon-Sun
+        const orderedLabels = ['月', '火', '水', '木', '金', '土', '日'];
+        const orderedData = [1, 2, 3, 4, 5, 6, 0].map(i => weekdayAvgs[i]);
+
+        if (weekdayChart) weekdayChart.destroy();
+        weekdayChart = new Chart(document.getElementById('chart-weekday'), {
+          type: 'bar',
+          data: {
+            labels: orderedLabels,
+            datasets: [{
+              label: '平均達成率 (%)',
+              data: orderedData,
+              backgroundColor: orderedData.map(v => v >= 75 ? '#10B981' : '#6366F1'),
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
+              x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } }
+            }
+          }
+        });
+
+        // Leaderboard
+        const lb = document.getElementById('analytics-leaderboard');
+        lb.innerHTML = '';
+        const ranked = [...state.habits]
+          .map(h => ({ ...h, streak: calcHabitStreak(h) }))
+          .sort((a, b) => b.streak - a.streak);
+        ranked.forEach((h, idx) => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60';
+          row.innerHTML = `
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-5 text-xs font-bold text-slate-400">${idx + 1}</span>
+              <span class="text-lg">${h.icon}</span>
+              <span class="text-xs font-semibold truncate">${escapeHtml(h.name)}</span>
+            </div>
+            <span class="text-xs font-bold text-amber-500 shrink-0">🔥 ${h.streak}日連続</span>
+          `;
+          lb.appendChild(row);
+        });
+      }
+
+      // ================= ACTIONS =================
+
+      function toggleTaskComplete(taskId, dateStr) {
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        if (!task.completedDates) task.completedDates = {};
+        const nextVal = !task.completedDates[dateStr];
+        task.completedDates[dateStr] = nextVal;
+
+        // Sync to linked Moto habit
+        if (task.habitId) {
+          const habit = state.habits.find(h => h.id === task.habitId);
+          if (habit) {
+            if (nextVal) habit.logs[dateStr] = habit.target;
+            else if ((habit.logs[dateStr] || 0) >= habit.target) habit.logs[dateStr] = 0;
+          }
+        }
+        saveState();
+        renderAll();
+        if (nextVal) showToast('完了しました！ヒートマップにも反映されました');
+      }
+
+      function renderPicker(containerId, items, current, isColor, onSelect) {
+        const el = document.getElementById(containerId);
+        el.innerHTML = '';
+        items.forEach(item => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          if (isColor) {
+            const active = item.id === current;
+            btn.className = `w-7 h-7 rounded-full transition ${active ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-white dark:ring-offset-slate-900 scale-110' : ''}`;
+            btn.style.backgroundColor = item.hex;
+            btn.addEventListener('click', () => {
+              onSelect(item.id);
+              renderPicker(containerId, items, item.id, true, onSelect);
+            });
+          } else {
+            const active = item === current;
+            btn.className = `w-8 h-8 rounded-lg flex items-center justify-center text-base transition ${
+              active ? 'bg-rose-100 dark:bg-rose-900 ring-2 ring-rose-500' : 'bg-slate-100 dark:bg-slate-800'
+            }`;
+            btn.textContent = item;
+            btn.addEventListener('click', () => {
+              onSelect(item);
+              renderPicker(containerId, items, item, false, onSelect);
+            });
+          }
+          el.appendChild(btn);
+        });
+      }
+
+      function openTaskModal(task = null, opts = {}) {
+        const modal = document.getElementById('modal-task');
+        document.getElementById('modal-task-title').textContent = task ? '予定を編集' : '新しい予定を追加';
+        document.getElementById('task-id').value = task ? task.id : '';
+        document.getElementById('task-title').value = task ? task.title : '';
+        document.getElementById('task-date').value = task ? task.date : selectedDate;
+        document.getElementById('task-repeat').value = task ? task.repeat : 'none';
+
+        const hasTime = opts.forceTime ? true : (task ? !!task.start : true);
+        document.getElementById('task-has-time').checked = hasTime;
+        document.getElementById('task-time-fields').classList.toggle('hidden', !hasTime);
+        document.getElementById('task-start').value = opts.start || (task && task.start) || '09:00';
+        document.getElementById('task-duration').value = String(opts.duration || (task && task.duration) || 30);
+
+        const habitSelect = document.getElementById('task-habit-link');
+        habitSelect.innerHTML = '<option value="">連携しない</option>' +
+          state.habits.map(h => `<option value="${h.id}">${h.icon} ${escapeHtml(h.name)}</option>`).join('');
+        habitSelect.value = task ? (task.habitId || '') : '';
+
+        document.getElementById('task-subtasks').value = task && task.subtasks
+          ? task.subtasks.map(s => s.text).join('\n')
+          : '';
+
+        formTaskIcon = task ? task.icon : ICONS[0];
+        formTaskColor = task ? task.color : COLORS[0].id;
+        renderPicker('task-icon-picker', ICONS, formTaskIcon, false, v => { formTaskIcon = v; });
+        renderPicker('task-color-picker', COLORS, formTaskColor, true, v => { formTaskColor = v; });
+
+        document.getElementById('btn-delete-task').classList.toggle('hidden', !task);
+        modal.classList.remove('hidden');
+      }
+
+      function openHabitModal(habit = null) {
+        const modal = document.getElementById('modal-habit');
+        document.getElementById('modal-habit-title').textContent = habit ? '習慣を編集' : '新しい習慣を追加';
+        document.getElementById('habit-id').value = habit ? habit.id : '';
+        document.getElementById('habit-name').value = habit ? habit.name : '';
+        document.getElementById('habit-category').value = habit ? habit.category : '学習・研究';
+        document.getElementById('habit-target').value = habit ? habit.target : 1;
+        document.getElementById('habit-unit').value = habit ? habit.unit : '回';
+
+        formHabitIcon = habit ? habit.icon : ICONS[2];
+        formHabitColor = habit ? habit.color : COLORS[3].id;
+        renderPicker('habit-icon-picker', ICONS, formHabitIcon, false, v => { formHabitIcon = v; });
+        renderPicker('habit-color-picker', COLORS, formHabitColor, true, v => { formHabitColor = v; });
+
+        document.getElementById('btn-delete-habit').classList.toggle('hidden', !habit);
+        modal.classList.remove('hidden');
+      }
+
+      function switchTab(tab) {
+        activeTab = tab;
+        document.getElementById('view-timeline').classList.toggle('hidden', tab !== 'timeline');
+        document.getElementById('view-heatmap').classList.toggle('hidden', tab !== 'heatmap');
+        document.getElementById('view-itsu').classList.toggle('hidden', tab !== 'itsu');
+        document.getElementById('view-analytics').classList.toggle('hidden', tab !== 'analytics');
+
+        document.querySelectorAll('.tmode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          timelineMode = btn.dataset.tmode;
+          renderAll();
+        });
+      });
+
+      document.getElementById('btn-prev-month').addEventListener('click', () => {
+        const d = parseDateStr(selectedDate);
+        d.setMonth(d.getMonth() - 1, 1);
+        selectedDate = toDateStr(d);
+        weekStart = getMonday(selectedDate);
+        renderAll();
+      });
+
+      document.getElementById('btn-next-month').addEventListener('click', () => {
+        const d = parseDateStr(selectedDate);
+        d.setMonth(d.getMonth() + 1, 1);
+        selectedDate = toDateStr(d);
+        weekStart = getMonday(selectedDate);
+        renderAll();
+      });
+
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+          const isMe = btn.dataset.tab === tab;
+          btn.className = `nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full transition ${
+            isMe ? 'text-rose-500 font-semibold' : 'text-slate-400 dark:text-slate-500 font-medium hover:text-slate-600 dark:hover:text-slate-300'
+          }`;
+        });
+        renderAll();
+      }
+
+      function renderAll() {
+        applyTheme();
+        renderHeader();
+        if (activeTab === 'timeline') {
+          renderWeekStrip();
+          renderTimeline();
+        } else if (activeTab === 'heatmap') {
+          renderHeatmapView();
+        } else if (activeTab === 'itsu') {
+          renderItsuView();
+        } else {
+          renderAnalytics();
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // ================= EVENT LISTENERS =================
+
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
+
+      document.getElementById('btn-today').addEventListener('click', () => {
+        selectedDate = TODAY_STR;
+        weekStart = getMonday(TODAY_STR);
+        renderAll();
+      });
+
+      document.getElementById('btn-prev-week').addEventListener('click', () => {
+        weekStart = addDays(weekStart, -7);
+        selectedDate = weekStart;
+        renderAll();
+      });
+
+      document.getElementById('btn-next-week').addEventListener('click', () => {
+        weekStart = addDays(weekStart, 7);
+        selectedDate = weekStart;
+        renderAll();
+      });
+
+      document.getElementById('btn-theme').addEventListener('click', () => {
+        state.theme = state.theme === 'dark' ? 'light' : 'dark';
+        saveState();
+        renderAll();
+      });
+
+      document.getElementById('btn-primary-add').addEventListener('click', () => {
+        if (activeTab === 'heatmap') openHabitModal();
+        else if (activeTab === 'itsu') openItsuModal();
+        else openTaskModal();
+      });
+
+      document.getElementById('btn-add-habit-inline').addEventListener('click', () => openHabitModal());
+
+      document.getElementById('btn-toggle-inbox').addEventListener('click', () => {
+        inboxOpen = !inboxOpen;
+        renderTimeline();
+      });
+
+      document.getElementById('task-has-time').addEventListener('change', (e) => {
+        document.getElementById('task-time-fields').classList.toggle('hidden', !e.target.checked);
+      });
+
+      document.querySelectorAll('.heatmap-range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.heatmapWeeks = Number(btn.dataset.range);
+          saveState();
+          renderHeatmapView();
+        });
+      });
+
+      document.querySelectorAll('[data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById(btn.dataset.closeModal).classList.add('hidden');
+        });
+      });
+
+      document.getElementById('form-task').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('task-id').value;
+        const hasTime = document.getElementById('task-has-time').checked;
+        const subLines = document.getElementById('task-subtasks').value
+          .split('\n').map(s => s.trim()).filter(Boolean);
+
+        const existing = id ? state.tasks.find(t => t.id === id) : null;
+        const payload = {
+          id: id || 't_' + Date.now(),
+          title: document.getElementById('task-title').value.trim(),
+          icon: formTaskIcon,
+          color: formTaskColor,
+          date: document.getElementById('task-date').value,
+          start: hasTime ? document.getElementById('task-start').value : '',
+          duration: Number(document.getElementById('task-duration').value) || 30,
+          repeat: document.getElementById('task-repeat').value,
+          habitId: document.getElementById('task-habit-link').value,
+          completedDates: existing ? existing.completedDates : {},
+          subtasks: subLines.map((text, idx) => ({
+            text,
+            done: existing && existing.subtasks[idx] ? existing.subtasks[idx].done : false
+          }))
+        };
+
+        if (existing) {
+          Object.assign(existing, payload);
+        } else {
+          state.tasks.push(payload);
+        }
+        saveState();
+        document.getElementById('modal-task').classList.add('hidden');
+        renderAll();
+        showToast('予定を保存しました');
+      });
+
+      document.getElementById('btn-delete-task').addEventListener('click', () => {
+        const id = document.getElementById('task-id').value;
+        state.tasks = state.tasks.filter(t => t.id !== id);
+        saveState();
+        document.getElementById('modal-task').classList.add('hidden');
+        renderAll();
+        showToast('予定を削除しました');
+      });
+
+      document.getElementById('form-habit').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('habit-id').value;
+        const existing = id ? state.habits.find(h => h.id === id) : null;
+        const payload = {
+          id: id || 'h_' + Date.now(),
+          name: document.getElementById('habit-name').value.trim(),
+          icon: formHabitIcon,
+          color: formHabitColor,
+          category: document.getElementById('habit-category').value.trim() || 'その他',
+          target: Math.max(1, Number(document.getElementById('habit-target').value) || 1),
+          unit: document.getElementById('habit-unit').value.trim() || '回',
+          logs: existing ? existing.logs : {}
+        };
+        if (existing) {
+          Object.assign(existing, payload);
+        } else {
+          state.habits.push(payload);
+        }
+        saveState();
+        document.getElementById('modal-habit').classList.add('hidden');
+        renderAll();
+        showToast('習慣を保存しました');
+      });
+
+      document.getElementById('btn-delete-habit').addEventListener('click', () => {
+        const id = document.getElementById('habit-id').value;
+        state.habits = state.habits.filter(h => h.id !== id);
+        saveState();
+        document.getElementById('modal-habit').classList.add('hidden');
+        renderAll();
+        showToast('習慣を削除しました');
+      });
+
+      document.getElementById('btn-settings').addEventListener('click', () => {
+        document.getElementById('modal-settings').classList.remove('hidden');
+      });
+
+      document.getElementById('btn-export-json').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chronogrid-backup-${TODAY_STR}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('JSONをエクスポートしました');
+      });
+
+      document.getElementById('input-import-json').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            if (Array.isArray(parsed.tasks) && Array.isArray(parsed.habits)) {
+              state = parsed;
+              saveState();
+              document.getElementById('modal-settings').classList.add('hidden');
+              renderAll();
+              showToast('データをインポートしました');
+            }
+          } catch (err) {
+            showToast('JSONの読み込みに失敗しました');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      document.getElementById('btn-reset-demo').addEventListener('click', () => {
+        state = createSeedData();
+        saveState();
+        document.getElementById('modal-settings').classList.add('hidden');
+        renderAll();
+        showToast('サンプルデータに戻しました');
+      });
+
+      // ================= .ICS IMPORT / EXPORT (OFFLINE) =================
+      function formatIcsDateTime(dateStr, timeStr) {
+        const d = dateStr.replace(/-/g, '');
+        if (!timeStr) return d;
+        return `${d}T${timeStr.replace(':', '')}00`;
+      }
+
+      function escapeIcsText(str) {
+        return String(str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+      }
+
+      function exportIcs() {
+        const lines = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//ChronoGrid//Calendar//JA',
+          'CALSCALE:GREGORIAN'
+        ];
+        state.tasks.forEach(t => {
+          lines.push('BEGIN:VEVENT');
+          lines.push(`UID:${t.id}@chronogrid.local`);
+          if (t.start) {
+            const startDt = formatIcsDateTime(t.date, t.start);
+            const endMins = timeToMins(t.start) + (t.duration || 30);
+            const endDate = endMins >= 1440 ? addDays(t.date, 1) : t.date;
+            const endTime = minsToTime(endMins % 1440);
+            lines.push(`DTSTART:${startDt}`);
+            lines.push(`DTEND:${formatIcsDateTime(endDate, endTime)}`);
+          } else {
+            lines.push(`DTSTART;VALUE=DATE:${t.date.replace(/-/g, '')}`);
+            lines.push(`DTEND;VALUE=DATE:${addDays(t.date, 1).replace(/-/g, '')}`);
+          }
+          lines.push(`SUMMARY:${escapeIcsText(t.title)}`);
+          if (t.repeat === 'daily') lines.push('RRULE:FREQ=DAILY');
+          else if (t.repeat === 'weekdays') lines.push('RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR');
+          else if (t.repeat === 'weekends') lines.push('RRULE:FREQ=WEEKLY;BYDAY=SA,SU');
+          lines.push('END:VEVENT');
+        });
+        lines.push('END:VCALENDAR');
+        const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chronogrid-calendar-${TODAY_STR}.ics`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('.ics ファイルを書き出しました');
+      }
+
+      function parseIcsDateVal(rawVal) {
+        const val = rawVal.trim();
+        if (/^\d{8}$/.test(val)) {
+          return { date: `${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}`, time: '' };
+        }
+        const m = val.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+        if (!m) return null;
+        if (m[7] === 'Z') {
+          const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
+          return {
+            date: toDateStr(dt),
+            time: `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+          };
+        }
+        return {
+          date: `${m[1]}-${m[2]}-${m[3]}`,
+          time: `${m[4]}:${m[5]}`
+        };
+      }
+
+      function importIcsText(text) {
+        const unfolded = text.replace(/\r?\n[ \t]/g, '');
+        const lines = unfolded.split(/\r?\n/);
+        let inEvent = false;
+        let ev = {};
+        let added = 0;
+
+        lines.forEach(line => {
+          if (line === 'BEGIN:VEVENT') {
+            inEvent = true;
+            ev = {};
+          } else if (line === 'END:VEVENT') {
+            inEvent = false;
+            if (ev.summary && ev.dtstart) {
+              const startParsed = parseIcsDateVal(ev.dtstart);
+              if (!startParsed) return;
+              let duration = 60;
+              if (ev.dtend && startParsed.time) {
+                const endParsed = parseIcsDateVal(ev.dtend);
+                if (endParsed && endParsed.time) {
+                  const diff = timeToMins(endParsed.time) - timeToMins(startParsed.time);
+                  if (diff > 0 && diff <= 720) duration = diff;
+                }
+              }
+              let repeat = 'none';
+              if (ev.rrule) {
+                if (ev.rrule.includes('FREQ=DAILY')) repeat = 'daily';
+                else if (ev.rrule.includes('MO,TU,WE,TH,FR')) repeat = 'weekdays';
+                else if (ev.rrule.includes('SA,SU')) repeat = 'weekends';
+              }
+              const exists = state.tasks.some(t =>
+                (ev.uid && t.icsUid === ev.uid) ||
+                (t.title === ev.summary && t.date === startParsed.date && t.start === startParsed.time)
+              );
+              if (!exists) {
+                state.tasks.push({
+                  id: 't_ics_' + Date.now() + '_' + added,
+                  icsUid: ev.uid || '',
+                  title: ev.summary,
+                  icon: '🗓️',
+                  color: COLORS[added % COLORS.length].id,
+                  date: startParsed.date,
+                  start: startParsed.time,
+                  duration,
+                  repeat,
+                  habitId: '',
+                  completedDates: {},
+                  subtasks: []
+                });
+                added++;
+              }
+            }
+          } else if (inEvent) {
+            const colonIdx = line.indexOf(':');
+            if (colonIdx === -1) return;
+            const keyPart = line.slice(0, colonIdx).split(';')[0].toUpperCase();
+            const valPart = line.slice(colonIdx + 1)
+              .replace(/\\n/g, ' ')
+              .replace(/\\,/g, ',')
+              .replace(/\\;/g, ';')
+              .replace(/\\\\/g, '\\');
+            if (keyPart === 'SUMMARY') ev.summary = valPart;
+            else if (keyPart === 'DTSTART') ev.dtstart = valPart;
+            else if (keyPart === 'DTEND') ev.dtend = valPart;
+            else if (keyPart === 'UID') ev.uid = valPart;
+            else if (keyPart === 'RRULE') ev.rrule = valPart;
+          }
+        });
+
+        if (added > 0) {
+          saveState();
+          renderAll();
+        }
+        return added;
+      }
+
+      document.getElementById('btn-export-ics').addEventListener('click', exportIcs);
+      document.getElementById('input-import-ics').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const count = importIcsText(String(reader.result || ''));
+          document.getElementById('modal-settings').classList.add('hidden');
+          showToast(count > 0 ? `${count}件の予定を .ics から取り込みました` : '新規の予定は見つかりませんでした');
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      });
+
+      // ================= PASSCODE LOCK =================
+      let pinBuffer = '';
+
+      function encodePin(pin) {
+        return btoa('chronogrid_pin_' + pin);
+      }
+
+      function updatePasscodeUI() {
+        const hasPin = !!state.passcodeHash;
+        document.getElementById('passcode-status-badge').textContent = hasPin ? 'ON' : 'OFF';
+        document.getElementById('passcode-status-badge').className = hasPin
+          ? 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+          : 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500';
+        document.getElementById('passcode-setup-row').classList.toggle('hidden', hasPin);
+        document.getElementById('passcode-active-row').classList.toggle('hidden', !hasPin);
+      }
+
+      function renderLockDots() {
+        const dots = document.querySelectorAll('.lock-dot');
+        dots.forEach((dot, idx) => {
+          if (idx < pinBuffer.length) {
+            dot.classList.add('bg-rose-500', 'border-rose-500');
+            dot.classList.remove('border-slate-300', 'dark:border-slate-600');
+          } else {
+            dot.classList.remove('bg-rose-500', 'border-rose-500');
+            dot.classList.add('border-slate-300', 'dark:border-slate-600');
+          }
+        });
+      }
+
+      function showLockScreen() {
+        pinBuffer = '';
+        renderLockDots();
+        document.getElementById('lock-subtitle').textContent = '4桁のパスコードを入力してください';
+        document.getElementById('lock-screen').classList.remove('hidden');
+      }
+
+      document.querySelectorAll('.pin-key').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (pinBuffer.length >= 4) return;
+          pinBuffer += btn.dataset.pinKey;
+          renderLockDots();
+          if (pinBuffer.length === 4) {
+            if (encodePin(pinBuffer) === state.passcodeHash) {
+              document.getElementById('lock-screen').classList.add('hidden');
+              pinBuffer = '';
+              renderLockDots();
+            } else {
+              document.getElementById('lock-subtitle').textContent = 'パスコードが違います。もう一度お試しください';
+              setTimeout(() => {
+                pinBuffer = '';
+                renderLockDots();
+              }, 350);
+            }
+          }
+        });
+      });
+
+      document.getElementById('btn-pin-del').addEventListener('click', () => {
+        pinBuffer = pinBuffer.slice(0, -1);
+        renderLockDots();
+      });
+
+      document.getElementById('btn-save-passcode').addEventListener('click', () => {
+        const val = document.getElementById('input-passcode-new').value.trim();
+        if (!/^\d{4}$/.test(val)) {
+          showToast('4桁の数字を入力してください');
+          return;
+        }
+        state.passcodeHash = encodePin(val);
+        saveState();
+        document.getElementById('input-passcode-new').value = '';
+        updatePasscodeUI();
+        showToast('パスコードロックを設定しました');
+      });
+
+      document.getElementById('btn-clear-passcode').addEventListener('click', () => {
+        delete state.passcodeHash;
+        saveState();
+        updatePasscodeUI();
+        showToast('パスコードロックを解除しました');
+      });
+
+      document.getElementById('btn-lock-now').addEventListener('click', () => {
+        document.getElementById('modal-settings').classList.add('hidden');
+        showLockScreen();
+      });
+
+      // ================= PRIVATE GAS SYNC (SHEETS + GCAL) =================
+      const GAS_CONFIG_KEY = 'chronogrid_gas_config_v1';
+
+      function loadGasConfig() {
+        try {
+          const raw = localStorage.getItem(GAS_CONFIG_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return { url: '', token: '', syncGcal: true };
+      }
+
+      function saveGasConfig(cfg) {
+        try {
+          localStorage.setItem(GAS_CONFIG_KEY, JSON.stringify(cfg));
+        } catch (e) {}
+      }
+
+      let gasConfig = loadGasConfig();
+
+      function updateGasUI() {
+        const configured = !!(gasConfig.url && gasConfig.token);
+        document.getElementById('input-gas-url').value = gasConfig.url || '';
+        document.getElementById('input-gas-token').value = gasConfig.token || '';
+        document.getElementById('input-gas-gcal').checked = gasConfig.syncGcal !== false;
+        document.getElementById('btn-quick-sync').classList.toggle('hidden', !configured);
+        const badge = document.getElementById('gas-status-badge');
+        badge.textContent = configured ? '設定済み' : '未設定';
+        badge.className = configured
+          ? 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+          : 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-500';
+      }
+
+      async function callGas(action, extra = {}) {
+        if (!gasConfig.url || !gasConfig.token) {
+          showToast('先にGAS URLと秘密トークンを設定してください');
+          return null;
+        }
+        try {
+          const res = await fetch(gasConfig.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ token: gasConfig.token, action, ...extra })
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          return data;
+        } catch (err) {
+          showToast('同期エラー: ' + (err.message || '通信できません'));
+          return null;
+        }
+      }
+
+      async function pullFromGas() {
+        showToast('クラウドから読み込み中...');
+        const data = await callGas('pull', {
+          syncGcal: gasConfig.syncGcal !== false,
+          startDate: addDays(TODAY_STR, -14),
+          endDate: addDays(TODAY_STR, 45)
+        });
+        if (!data) return;
+        if (data.state && Array.isArray(data.state.tasks) && Array.isArray(data.state.habits)) {
+          state = data.state;
+          if (!Array.isArray(state.itsuItems)) state.itsuItems = [];
+        }
+        // Merge Google Calendar events if returned
+        if (Array.isArray(data.gcalEvents)) {
+          const nonGcalTasks = state.tasks.filter(t => !t.gcalId);
+          const existingMap = new Map(state.tasks.filter(t => t.gcalId).map(t => [t.gcalId, t]));
+          const gcalTasks = data.gcalEvents.map((ev, idx) => {
+            const prev = existingMap.get(ev.id);
+            return {
+              id: prev ? prev.id : 'gcal_' + idx + '_' + Date.now(),
+              gcalId: ev.id,
+              title: ev.title || '(無題)',
+              icon: prev ? prev.icon : '📅',
+              color: prev ? prev.color : 'sky',
+              date: ev.date,
+              start: ev.start || '',
+              duration: ev.duration || 60,
+              repeat: 'none',
+              habitId: prev ? prev.habitId : '',
+              completedDates: prev ? prev.completedDates : {},
+              subtasks: prev ? prev.subtasks : []
+            };
+          });
+          state.tasks = [...nonGcalTasks, ...gcalTasks];
+        }
+        saveState();
+        renderAll();
+        showToast('クラウド＆Gカレンダーと同期しました');
+      }
+
+      async function pushToGas() {
+        showToast('クラウドへ保存中...');
+        const res = await callGas('push', { payload: state });
+        if (res && res.ok) {
+          showToast('クラウドへ保存しました');
+        }
+      }
+
+      document.getElementById('btn-gas-save').addEventListener('click', () => {
+        gasConfig = {
+          url: document.getElementById('input-gas-url').value.trim(),
+          token: document.getElementById('input-gas-token').value.trim(),
+          syncGcal: document.getElementById('input-gas-gcal').checked
+        };
+        saveGasConfig(gasConfig);
+        updateGasUI();
+        showToast('GAS設定を保存しました');
+      });
+
+      document.getElementById('btn-gas-pull').addEventListener('click', pullFromGas);
+      document.getElementById('btn-gas-push').addEventListener('click', pushToGas);
+      document.getElementById('btn-quick-sync').addEventListener('click', pullFromGas);
+
+      updateGasUI();
+      updatePasscodeUI();
+      if (state.passcodeHash) {
+        showLockScreen();
+      }
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
