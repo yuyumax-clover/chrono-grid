@@ -2468,17 +2468,31 @@
         const nextVal = !task.completedDates[dateStr];
         task.completedDates[dateStr] = nextVal;
 
-        // Sync to linked habit
-        if (task.habitId) {
+        // Sync to linked habit proportionally to task duration
+        let habitToast = '';
+        if (task.habitId && dateStr !== '_undated') {
           const habit = state.habits.find(h => h.id === task.habitId);
           if (habit) {
-            if (nextVal) habit.logs[dateStr] = habit.target;
-            else if ((habit.logs[dateStr] || 0) >= habit.target) habit.logs[dateStr] = 0;
+            const unit = String(habit.unit || '').trim().toLowerCase();
+            const durMins = task.duration === 0 ? 0 : (task.duration || 30);
+            let delta = 1;
+            if (unit === '時間' || unit === 'h' || unit === 'hr' || unit === 'hrs' || unit === 'hour' || unit === 'hours') {
+              delta = Math.round((durMins / 60) * 10) / 10;
+            } else if (unit === '分' || unit === 'm' || unit === 'min' || unit === 'mins' || unit === 'minute' || unit === 'minutes') {
+              delta = durMins;
+            }
+            const cur = habit.logs[dateStr] && habit.logs[dateStr] > 0 ? habit.logs[dateStr] : 0;
+            if (nextVal) {
+              habit.logs[dateStr] = Math.round((cur + delta) * 10) / 10;
+              habitToast = `「${habit.name}」に +${delta}${habit.unit} 記録しました`;
+            } else {
+              habit.logs[dateStr] = Math.max(0, Math.round((cur - delta) * 10) / 10);
+            }
           }
         }
         saveState();
         renderAll();
-        if (nextVal) showToast('完了しました！ヒートマップにも反映されました');
+        if (nextVal) showToast(habitToast || '完了しました！ヒートマップにも反映されました');
       }
 
       function renderPicker(containerId, items, current, isColor, onSelect) {
