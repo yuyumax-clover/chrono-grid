@@ -731,7 +731,17 @@
         return m === 0 ? `${h}時間` : `${h}時間${m}分`;
       }
 
-      const TODAY_STR = toDateStr(new Date());
+      const DAY_START_HOUR = 4; // 1日の境目は朝4:00
+      const TODAY_STR = (() => {
+        const d = new Date();
+        d.setHours(d.getHours() - DAY_START_HOUR);
+        return toDateStr(d);
+      })();
+
+      function toAxisMins(t) {
+        const m = timeToMins(t);
+        return m < DAY_START_HOUR * 60 ? m + 1440 : m;
+      }
 
       function createSeedData() {
         const habits = [
@@ -1077,7 +1087,7 @@
 
         const dayTasks = state.tasks.filter(t => taskAppliesToDate(t, selectedDate));
         const inboxTasks = dayTasks.filter(t => !t.start);
-        const scheduledTasks = dayTasks.filter(t => !!t.start).sort((a, b) => timeToMins(a.start) - timeToMins(b.start));
+        const scheduledTasks = dayTasks.filter(t => !!t.start).sort((a, b) => toAxisMins(a.start) - toAxisMins(b.start));
 
         const doneCount = dayTasks.filter(t => isTaskCompleted(t, selectedDate)).length;
         const pct = dayTasks.length ? Math.round((doneCount / dayTasks.length) * 100) : 0;
@@ -1141,9 +1151,9 @@
         const list = document.getElementById('timeline-list');
         list.innerHTML = '';
 
-        const PX_PER_MIN = 1.05; // 1 hour = 63px (full 24h)
-        const startHour = 0;
-        const endHour = 24;
+        const PX_PER_MIN = 1.05; // 1 hour = 63px (04:00 - 翌04:00)
+        const startHour = 4;
+        const endHour = 28;
 
         const baseMins = startHour * 60;
         const totalHeight = (endHour - startHour) * 60 * PX_PER_MIN;
@@ -1162,7 +1172,7 @@
           const lbl = document.createElement('div');
           lbl.className = 'absolute right-2 text-[10px] font-semibold text-slate-400 -translate-y-1/2';
           lbl.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 8}px`;
-          lbl.textContent = `${String(h).padStart(2, '0')}:00`;
+          lbl.textContent = `${String(h % 24).padStart(2, '0')}:00`;
           axis.appendChild(lbl);
         }
 
@@ -1175,12 +1185,13 @@
           const slotTop = (h - startHour) * 60 * PX_PER_MIN + 8;
           const slot = document.createElement('button');
           slot.type = 'button';
-          slot.title = `${String(h).padStart(2, '0')}:00 に予定を追加`;
+          const dispH = String(h % 24).padStart(2, '0');
+          slot.title = `${dispH}:00 に予定を追加`;
           slot.className = 'absolute left-0 right-0 border-t border-slate-200/70 dark:border-slate-800/70 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition text-left';
           slot.style.top = `${slotTop}px`;
           slot.style.height = `${60 * PX_PER_MIN}px`;
           slot.innerHTML = '<div class="w-full border-t border-dashed border-slate-100 dark:border-slate-800/50 mt-[36px]"></div>';
-          slot.addEventListener('click', () => openTaskModal(null, { start: `${String(h).padStart(2, '0')}:00` }));
+          slot.addEventListener('click', () => openTaskModal(null, { start: `${dispH}:00` }));
           canvas.appendChild(slot);
         }
         // Bottom closing line
@@ -1191,7 +1202,7 @@
 
         // Compute simple overlap columns
         const placed = scheduledTasks.map(task => {
-          const s = timeToMins(task.start);
+          const s = toAxisMins(task.start);
           const e = s + (task.duration || 30);
           return { task, s, e, col: 0, totalCols: 1 };
         });
@@ -1285,7 +1296,8 @@
         // Current time indicator line on Today
         if (selectedDate === TODAY_STR) {
           const now = new Date();
-          const nowMins = now.getHours() * 60 + now.getMinutes();
+          const rawNowMins = now.getHours() * 60 + now.getMinutes();
+          const nowMins = rawNowMins < DAY_START_HOUR * 60 ? rawNowMins + 1440 : rawNowMins;
           if (nowMins >= baseMins && nowMins <= endHour * 60) {
             const nowTop = (nowMins - baseMins) * PX_PER_MIN + 8;
             const nowLine = document.createElement('div');
@@ -1309,9 +1321,9 @@
         const list = document.getElementById('timeline-list');
         list.innerHTML = '';
 
-        const PX_PER_MIN = 0.75; // 1 hour = 45px (full 24h)
-        const startHour = 0;
-        const endHour = 24;
+        const PX_PER_MIN = 0.75; // 1 hour = 45px (04:00 - 翌04:00)
+        const startHour = 4;
+        const endHour = 28;
         const baseMins = startHour * 60;
         const totalHeight = (endHour - startHour) * 60 * PX_PER_MIN;
 
@@ -1361,7 +1373,7 @@
           const lbl = document.createElement('div');
           lbl.className = 'absolute right-1.5 text-[9px] font-semibold text-slate-400 -translate-y-1/2';
           lbl.style.top = `${(h - startHour) * 60 * PX_PER_MIN + 6}px`;
-          lbl.textContent = `${String(h).padStart(2, '0')}:00`;
+          lbl.textContent = `${String(h % 24).padStart(2, '0')}:00`;
           axis.appendChild(lbl);
         }
 
@@ -1389,14 +1401,14 @@
             slot.style.height = `${60 * PX_PER_MIN}px`;
             slot.addEventListener('click', () => {
               selectedDate = ds;
-              openTaskModal(null, { start: `${String(h).padStart(2, '0')}:00` });
+              openTaskModal(null, { start: `${String(h % 24).padStart(2, '0')}:00` });
             });
             col.appendChild(slot);
           }
 
           const dayTasks = state.tasks.filter(t => t.start && taskAppliesToDate(t, ds));
           dayTasks.forEach(task => {
-            const s = timeToMins(task.start);
+            const s = toAxisMins(task.start);
             const dur = task.duration || 30;
             if (s < baseMins || s >= endHour * 60) return;
             const color = getColorObj(task.color);
@@ -1424,7 +1436,8 @@
 
           if (ds === TODAY_STR) {
             const now = new Date();
-            const nowMins = now.getHours() * 60 + now.getMinutes();
+            const rawNowMins = now.getHours() * 60 + now.getMinutes();
+            const nowMins = rawNowMins < DAY_START_HOUR * 60 ? rawNowMins + 1440 : rawNowMins;
             if (nowMins >= baseMins && nowMins <= endHour * 60) {
               const nl = document.createElement('div');
               nl.className = 'absolute left-0 right-0 h-0.5 bg-rose-500 pointer-events-none z-20';
