@@ -510,6 +510,7 @@
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">所要時間（分）</label>
             <select id="task-duration" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
+              <option value="0">0分（単発・起床/就寝など）</option>
               <option value="15">15分</option>
               <option value="30" selected>30分</option>
               <option value="45">45分</option>
@@ -1395,8 +1396,9 @@
         // Compute simple overlap columns
         const placed = scheduledTasks.map(task => {
           const s = toAxisMins(task.start);
-          const e = s + (task.duration || 30);
-          return { task, s, e, col: 0, totalCols: 1 };
+          const dur = task.duration === 0 ? 0 : (task.duration || 30);
+          const e = s + (dur === 0 ? 15 : dur);
+          return { task, s, e, dur, col: 0, totalCols: 1 };
         });
         for (let i = 0; i < placed.length; i++) {
           let maxCol = 0;
@@ -1415,26 +1417,41 @@
         }
 
         // Render task blocks proportionally
-        placed.forEach(({ task, s, e, col, totalCols }) => {
+        placed.forEach(({ task, s, e, dur, col, totalCols }) => {
           const color = getColorObj(task.color);
           const done = isTaskCompleted(task, selectedDate);
           const linkedHabit = task.habitId ? state.habits.find(h => h.id === task.habitId) : null;
           const topPx = (s - baseMins) * PX_PER_MIN + 8;
-          const heightPx = Math.max(36, (task.duration || 30) * PX_PER_MIN - 2);
+          const isPoint = dur === 0;
+          const heightPx = isPoint ? 26 : Math.max(36, dur * PX_PER_MIN - 2);
           const isCompact = heightPx < 58;
 
           const widthPct = 100 / totalCols;
           const leftPct = col * widthPct;
 
           const block = document.createElement('div');
-          block.className = `absolute rounded-xl border-l-4 ${color.border} ${color.bg} border border-slate-200/70 dark:border-slate-800/80 shadow-xs overflow-hidden transition cursor-pointer ${done ? 'opacity-65' : ''}`;
+          if (isPoint) {
+            block.className = `absolute rounded-full border ${color.border} ${color.bg} shadow-2xs overflow-hidden transition cursor-pointer -translate-y-1/2 ${done ? 'opacity-65' : ''}`;
+          } else {
+            block.className = `absolute rounded-xl border-l-4 ${color.border} ${color.bg} border border-slate-200/70 dark:border-slate-800/80 shadow-xs overflow-hidden transition cursor-pointer ${done ? 'opacity-65' : ''}`;
+          }
           block.style.top = `${topPx}px`;
           block.style.height = `${heightPx}px`;
           block.style.left = `calc(${leftPct}% + 6px)`;
           block.style.width = `calc(${widthPct}% - 10px)`;
-          block.style.zIndex = '10';
+          block.style.zIndex = isPoint ? '15' : '10';
 
-          block.innerHTML = `
+          block.innerHTML = isPoint ? `
+            <div class="h-full px-2.5 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <span class="text-xs shrink-0">${task.icon}</span>
+                <span class="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate ${done ? 'line-through' : ''}">${task.start} ${escapeHtml(task.title)}</span>
+              </div>
+              <button type="button" aria-label="完了切替" class="task-check-btn w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold shrink-0 transition ${
+                done ? `${color.badge} border-transparent text-white animate-pop` : 'border-slate-300 dark:border-slate-600 bg-white/90 dark:bg-slate-900'
+              }">${done ? '✓' : ''}</button>
+            </div>
+          ` : `
             <div class="h-full px-2.5 ${isCompact ? 'py-1 flex items-center justify-between gap-2' : 'py-2 flex flex-col justify-between'}">
               <div class="flex items-start justify-between gap-2 min-w-0 w-full">
                 <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -1601,12 +1618,12 @@
           const dayTasks = state.tasks.filter(t => t.start && taskAppliesToDate(t, ds));
           dayTasks.forEach(task => {
             const s = toAxisMins(task.start);
-            const dur = task.duration || 30;
+            const dur = task.duration === 0 ? 0 : (task.duration || 30);
             if (s < baseMins || s >= endHour * 60) return;
             const color = getColorObj(task.color);
             const done = isTaskCompleted(task, ds);
             const topPx = (s - baseMins) * PX_PER_MIN + 6;
-            const heightPx = Math.max(22, dur * PX_PER_MIN - 2);
+            const heightPx = dur === 0 ? 18 : Math.max(22, dur * PX_PER_MIN - 2);
 
             const block = document.createElement('div');
             block.className = `absolute left-0.5 right-0.5 rounded-lg border-l-2 ${color.border} ${color.bg} px-1 py-0.5 overflow-hidden cursor-pointer shadow-2xs z-10 ${done ? 'opacity-55' : ''}`;
@@ -2503,7 +2520,7 @@
         document.getElementById('task-has-time').checked = hasDate && hasTime;
         document.getElementById('task-time-fields').classList.toggle('hidden', !(hasDate && hasTime));
         document.getElementById('task-start').value = opts.start || (task && task.start) || '09:00';
-        document.getElementById('task-duration').value = String(opts.duration || (task && task.duration) || 30);
+        document.getElementById('task-duration').value = String(opts.duration !== undefined ? opts.duration : (task && task.duration !== undefined ? task.duration : 30));
 
         const habitSelect = document.getElementById('task-habit-link');
         habitSelect.innerHTML = '<option value="">連携しない</option>' +
@@ -2697,7 +2714,7 @@
           color: formTaskColor,
           date: hasDate ? document.getElementById('task-date').value : '',
           start: hasTime ? document.getElementById('task-start').value : '',
-          duration: Number(document.getElementById('task-duration').value) || 30,
+          duration: (Number.isNaN(Number(document.getElementById('task-duration').value)) ? 30 : Number(document.getElementById('task-duration').value)),
           repeat: hasDate ? document.getElementById('task-repeat').value : 'none',
           habitId: document.getElementById('task-habit-link').value,
           completedDates: existing ? existing.completedDates : {},
@@ -2901,7 +2918,7 @@
           lines.push(`UID:${t.id}@chronogrid.local`);
           if (t.start) {
             const startDt = formatIcsDateTime(t.date, t.start);
-            const endMins = timeToMins(t.start) + (t.duration || 30);
+            const endMins = timeToMins(t.start) + (t.duration === 0 ? 0 : (t.duration || 30));
             const endDate = endMins >= 1440 ? addDays(t.date, 1) : t.date;
             const endTime = minsToTime(endMins % 1440);
             lines.push(`DTSTART:${startDt}`);
