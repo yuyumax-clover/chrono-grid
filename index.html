@@ -126,7 +126,7 @@
   </div>
 
   <!-- App Shell (Centered mobile-first container, adapts cleanly to desktop) -->
-  <div id="app-shell" class="w-full max-w-2xl mx-auto flex flex-col min-h-screen bg-[#F5F5F7] dark:bg-[#0A0B0F] relative">
+  <div id="app-shell" class="w-full max-w-2xl md:max-w-5xl mx-auto flex flex-col min-h-screen bg-[#F5F5F7] dark:bg-[#0A0B0F] relative">
 
     <!-- Top Header -->
     <header class="sticky top-0 z-30 bg-[#F5F5F7]/85 dark:bg-[#0A0B0F]/85 backdrop-blur-xl border-b border-black/[0.05] dark:border-white/[0.06] px-4 pt-3.5 pb-2.5">
@@ -194,6 +194,8 @@
           </div>
         </div>
 
+        <div id="timeline-layout-grid" class="space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-5 md:items-start">
+        <div id="timeline-side-col" class="space-y-4 md:col-span-4 md:sticky md:top-36">
         <!-- Daily Progress Banner (Full-Card Gauge + Circular Ring) -->
         <div id="daily-progress-banner" class="relative overflow-hidden bg-white dark:bg-[#15171E] rounded-3xl p-4 border border-black/[0.06] dark:border-white/[0.08] shadow-sm">
           <!-- Full-frame background gauge fill -->
@@ -241,8 +243,10 @@
           <div id="inbox-list" class="px-3 pb-3 space-y-1.5 border-t border-slate-100 dark:border-slate-800/80 pt-2"></div>
         </div>
 
+        </div>
         <!-- Structured Visual Timeline -->
-        <div id="timeline-list" class="space-y-2"></div>
+        <div id="timeline-list" class="space-y-2 md:col-span-8"></div>
+        </div>
       </section>
 
       <!-- TAB 2: HEATMAP (Habit) -->
@@ -321,12 +325,13 @@
             </button>
           </div>
           <div id="habit-category-pills" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"></div>
-          <div id="habit-cards-list" class="space-y-2.5"></div>
+          <div id="habit-cards-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
       </section>
 
       <!-- TAB 3: ANALYTICS -->
       <section id="view-analytics" class="hidden space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
           <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">直近14日間の達成率推移</h2>
           <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">タイムライン予定と習慣の総合達成率（%）</p>
@@ -343,6 +348,7 @@
           </div>
         </div>
 
+        </div>
         <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
           <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-3">連続記録ランキング & 節目</h2>
           <div id="analytics-leaderboard" class="space-y-2"></div>
@@ -369,29 +375,77 @@
           </button>
         </div>
 
-        <div id="itsu-cards-list" class="space-y-2.5"></div>
+        <div id="itsu-cards-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      </section>
+
+      <!-- TAB 5: SHOPPING MEMO -->
+      <section id="view-shopping" class="hidden space-y-4">
+        <!-- Quick Continuous Add Card -->
+        <form id="form-shopping-add" class="bg-white dark:bg-[#15171E] rounded-3xl p-3.5 border border-black/[0.06] dark:border-white/[0.08] shadow-sm space-y-2.5">
+          <div class="flex items-center gap-2">
+            <input id="shop-input-name" type="text" required placeholder="買うものを入力（例: 牛乳、電池）" class="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+            <button type="submit" class="px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold shadow-xs active:scale-95 transition shrink-0">
+              追加
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="shop-input-aisle" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none">
+              <option value="🥬 生鮮・食材">🥬 生鮮・食材</option>
+              <option value="🧴 日用品">🧴 日用品</option>
+              <option value="☕️ 飲料・お菓子">☕️ 飲料・お菓子</option>
+              <option value="📦 その他">📦 その他</option>
+            </select>
+            <input id="shop-input-note" type="text" placeholder="数量・お店メモ（任意）" class="flex-1 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-xs outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+        </form>
+
+        <!-- One-tap Frequent Items -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between px-1">
+            <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">⭐ よく買うもの（1タップで追加）</p>
+          </div>
+          <div id="shopping-favorites" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"></div>
+        </div>
+
+        <!-- Active Shopping List (Grouped by Aisle) -->
+        <div id="shopping-active-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 items-start"></div>
+
+        <!-- Checked / In-Cart Section -->
+        <div id="shopping-done-section" class="hidden bg-white/70 dark:bg-[#15171E]/70 rounded-3xl p-3.5 border border-black/[0.05] dark:border-white/[0.06] space-y-2.5">
+          <div class="flex items-center justify-between">
+            <p id="shopping-done-title" class="text-xs font-bold text-slate-500 dark:text-slate-400">カゴに入れたもの (0)</p>
+            <button id="btn-shopping-clear-done" type="button" class="text-[11px] font-semibold text-rose-500 hover:text-rose-600">
+              購入済みをまとめて削除
+            </button>
+          </div>
+          <div id="shopping-done-list" class="space-y-1.5"></div>
+        </div>
       </section>
 
     </main>
 
     <!-- Floating Bottom Tab Dock (iOS Native Pill Style) -->
-    <nav class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-4 pb-3" style="padding-bottom: calc(12px + var(--safe-bottom));">
-      <div class="pointer-events-auto max-w-md mx-auto grid grid-cols-4 h-14 rounded-full bg-white/85 dark:bg-[#15171E]/90 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] shadow-[0_8px_30px_rgba(15,23,42,0.10)] px-1.5">
+    <nav class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-3 pb-3" style="padding-bottom: calc(12px + var(--safe-bottom));">
+      <div class="pointer-events-auto max-w-lg mx-auto grid grid-cols-5 h-14 rounded-full bg-white/85 dark:bg-[#15171E]/90 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] shadow-[0_8px_30px_rgba(15,23,42,0.10)] px-1">
         <button type="button" data-tab="timeline" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-rose-500 font-semibold transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-          <span class="text-[10px] tracking-tight">タイムライン</span>
+          <span class="text-[9px] tracking-tight">タイムライン</span>
         </button>
         <button type="button" data-tab="heatmap" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          <span class="text-[10px] tracking-tight">ヒートマップ</span>
+          <span class="text-[9px] tracking-tight">ヒートマップ</span>
         </button>
         <button type="button" data-tab="itsu" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <span class="text-[10px] tracking-tight">いつ？</span>
+          <span class="text-[9px] tracking-tight">いつ？</span>
+        </button>
+        <button type="button" data-tab="shopping" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 8H7"/></svg>
+          <span class="text-[9px] tracking-tight">買い物</span>
         </button>
         <button type="button" data-tab="analytics" class="nav-tab-btn flex flex-col items-center justify-center gap-0.5 rounded-full text-slate-400 dark:text-slate-500 font-medium transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20v-4"/></svg>
-          <span class="text-[10px] tracking-tight">分析</span>
+          <span class="text-[9px] tracking-tight">分析</span>
         </button>
       </div>
     </nav>
@@ -422,10 +476,15 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
+        <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-800 px-3.5 py-2.5 rounded-xl">
+          <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">日付を指定する（オフで日付未定へ）</span>
+          <input id="task-has-date" type="checkbox" checked class="w-4 h-4 accent-rose-500" />
+        </div>
+
+        <div id="task-date-fields" class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">日付</label>
-            <input id="task-date" type="date" required class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+            <input id="task-date" type="date" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">繰り返し</label>
@@ -596,7 +655,7 @@
       </div>
 
       <div class="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-3.5 text-xs space-y-1.5 text-slate-600 dark:text-slate-300">
-        <p class="font-bold text-slate-800 dark:text-slate-100">📱 iPhoneでネイティブアプリのように使う手順</p>
+        <p class="font-bold text-slate-800 dark:text-slate-100">📱 iPhone / iPad でネイティブアプリのように使う手順</p>
         <p>1. このHTMLファイルをGitHub Pagesなどにアップロードし、iPhoneのSafariで開きます。</p>
         <p>2. 画面下部の共有ボタン（□↑）→「ホーム画面に追加」をタップすると、アイコンから全画面で起動できます。</p>
         <p>3. データは端末のブラウザに自動保存され、下のJSONでバックアップも可能です。</p>
@@ -901,13 +960,27 @@
           }
         ];
 
+        const shoppingItems = [
+          { id: 's1', name: '牛乳', aisle: '🥬 生鮮・食材', note: '1本', done: false },
+          { id: 's2', name: '卵（10個入り）', aisle: '🥬 生鮮・食材', note: '', done: false },
+          { id: 's3', name: 'キッチンペーパー', aisle: '🧴 日用品', note: '', done: false }
+        ];
+        const shoppingFavorites = [
+          { name: '牛乳', aisle: '🥬 生鮮・食材' },
+          { name: '卵', aisle: '🥬 生鮮・食材' },
+          { name: 'コーヒー豆', aisle: '☕️ 飲料・お菓子' },
+          { name: 'トイレットペーパー', aisle: '🧴 日用品' }
+        ];
+
         return {
           theme: 'light',
           heatmapWeeks: 20,
           tasks,
           habits,
           itsuItems,
-          templates
+          templates,
+          shoppingItems,
+          shoppingFavorites
         };
       }
 
@@ -918,7 +991,9 @@
             const parsed = JSON.parse(raw);
             if (parsed && Array.isArray(parsed.tasks) && Array.isArray(parsed.habits)) {
               if (!Array.isArray(parsed.itsuItems)) parsed.itsuItems = createSeedData().itsuItems;
-              if (!Array.isArray(parsed.templates)) parsed.templates = createSeedData().templates;
+              if (!Array.isArray(parsed.templates)) parsed.templates = [];
+              if (!Array.isArray(parsed.shoppingItems)) parsed.shoppingItems = [];
+              if (!Array.isArray(parsed.shoppingFavorites)) parsed.shoppingFavorites = [];
               return parsed;
             }
           }
@@ -977,6 +1052,7 @@
       }
 
       function taskAppliesToDate(task, dateStr) {
+        if (!task.date) return false;
         if (task.excludedDates && task.excludedDates[dateStr]) return false;
         if (task.repeatUntil && dateStr > task.repeatUntil) return false;
         if (task.date === dateStr) return true;
@@ -1099,6 +1175,12 @@
           document.getElementById('btn-add-label').textContent = '項目';
           document.getElementById('week-strip-container').classList.add('hidden');
           document.getElementById('btn-today').classList.add('hidden');
+        } else if (activeTab === 'shopping') {
+          document.getElementById('header-title').textContent = '買い物メモ';
+          document.getElementById('header-subtitle').textContent = '売り場別リスト・よく買うもの';
+          document.getElementById('btn-add-label').textContent = '入力';
+          document.getElementById('week-strip-container').classList.add('hidden');
+          document.getElementById('btn-today').classList.add('hidden');
         } else {
           document.getElementById('header-title').textContent = 'インサイト & 分析';
           document.getElementById('header-subtitle').textContent = '達成率と連続記録の推移';
@@ -1160,6 +1242,10 @@
         document.getElementById('month-nav-controls').classList.toggle('hidden', timelineMode !== 'month');
         document.getElementById('daily-progress-banner').classList.toggle('hidden', timelineMode !== 'day');
         document.getElementById('btn-open-templates').classList.toggle('hidden', timelineMode !== 'day');
+        document.getElementById('timeline-side-col').classList.toggle('hidden', timelineMode !== 'day');
+        const tlListEl = document.getElementById('timeline-list');
+        tlListEl.classList.toggle('md:col-span-8', timelineMode === 'day');
+        tlListEl.classList.toggle('md:col-span-12', timelineMode !== 'day');
         document.getElementById('inbox-section').classList.toggle('hidden', timelineMode !== 'day');
 
         if (timelineMode === 'week') {
@@ -1177,7 +1263,8 @@
         document.getElementById('today-badge').classList.toggle('hidden', selectedDate !== TODAY_STR);
 
         const dayTasks = state.tasks.filter(t => taskAppliesToDate(t, selectedDate));
-        const inboxTasks = dayTasks.filter(t => !t.start);
+        const undatedTasks = state.tasks.filter(t => !t.date);
+        const inboxTasks = [...dayTasks.filter(t => !t.start), ...undatedTasks];
         const scheduledTasks = dayTasks.filter(t => !!t.start).sort((a, b) => toAxisMins(a.start) - toAxisMins(b.start));
 
         const doneCount = dayTasks.filter(t => isTaskCompleted(t, selectedDate)).length;
@@ -1215,7 +1302,8 @@
           inboxList.innerHTML = `<p class="text-[11px] text-slate-400 py-1 px-1">未割り当てのタスクはありません</p>`;
         } else {
           inboxTasks.forEach(task => {
-            const done = isTaskCompleted(task, selectedDate);
+            const compKey = task.date ? selectedDate : '_undated';
+            const done = isTaskCompleted(task, compKey);
             const row = document.createElement('div');
             row.className = 'flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60';
             row.innerHTML = `
@@ -1224,16 +1312,19 @@
                   ${done ? '✓' : ''}
                 </button>
                 <span class="text-base shrink-0">${task.icon}</span>
-                <span class="text-xs font-medium truncate ${done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}">${escapeHtml(task.title)}</span>
+                <div class="min-w-0 flex-1">
+                  <span class="text-xs font-medium truncate block ${done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}">${escapeHtml(task.title)}</span>
+                  ${!task.date ? '<span class="text-[9px] font-bold text-amber-600 dark:text-amber-400">日付・時間未定</span>' : ''}
+                </div>
               </div>
-              <button type="button" class="task-schedule-btn px-2 py-1 text-[10px] font-semibold rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 shrink-0">時間設定</button>
+              <button type="button" class="task-schedule-btn px-2 py-1 text-[10px] font-semibold rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 shrink-0">${task.date ? '時間設定' : '日時設定'}</button>
             `;
             row.querySelector('.task-check-btn').addEventListener('click', (e) => {
               e.stopPropagation();
-              toggleTaskComplete(task.id, selectedDate);
+              toggleTaskComplete(task.id, compKey);
             });
             row.querySelector('.task-edit-trigger').addEventListener('click', () => openTaskModal(task));
-            row.querySelector('.task-schedule-btn').addEventListener('click', () => openTaskModal(task, { forceTime: true }));
+            row.querySelector('.task-schedule-btn').addEventListener('click', () => openTaskModal(task, { forceDate: true, forceTime: true }));
             inboxList.appendChild(row);
           });
         }
@@ -2074,6 +2165,178 @@
         showToast('項目を削除しました');
       });
 
+      // ================= SHOPPING MEMO =================
+      function addShoppingItem(name, aisle, note = '') {
+        const cleanName = name.trim();
+        if (!cleanName) return;
+        if (!Array.isArray(state.shoppingItems)) state.shoppingItems = [];
+        const existing = state.shoppingItems.find(i => !i.done && i.name === cleanName);
+        if (existing) {
+          showToast(`「${cleanName}」はすでにリストにあります`);
+          return;
+        }
+        state.shoppingItems.unshift({
+          id: 's_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+          name: cleanName,
+          aisle: aisle || '📦 その他',
+          note: note.trim(),
+          done: false
+        });
+        saveState();
+        renderShoppingView();
+      }
+
+      function renderShoppingView() {
+        const items = state.shoppingItems || [];
+        const favs = state.shoppingFavorites || [];
+
+        // Render Favorites
+        const favEl = document.getElementById('shopping-favorites');
+        favEl.innerHTML = '';
+        if (favs.length === 0) {
+          favEl.innerHTML = '<span class="text-[11px] text-slate-400 px-1">アイテムの☆をタップするとここに登録されます</span>';
+        } else {
+          favs.forEach(fav => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'px-3 py-1.5 rounded-full bg-white dark:bg-[#15171E] border border-black/[0.06] dark:border-white/[0.08] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-rose-400 active:scale-95 transition shrink-0 shadow-2xs';
+            btn.textContent = `＋ ${fav.name}`;
+            btn.addEventListener('click', () => {
+              addShoppingItem(fav.name, fav.aisle);
+              showToast(`「${fav.name}」を追加しました`);
+            });
+            favEl.appendChild(btn);
+          });
+        }
+
+        const activeItems = items.filter(i => !i.done);
+        const doneItems = items.filter(i => i.done);
+
+        // Render Active List grouped by aisle
+        const activeContainer = document.getElementById('shopping-active-list');
+        activeContainer.innerHTML = '';
+
+        if (activeItems.length === 0) {
+          activeContainer.innerHTML = `
+            <div class="bg-white dark:bg-[#15171E] rounded-3xl p-8 text-center border border-dashed border-slate-300 dark:border-slate-700">
+              <p class="text-2xl mb-1.5">🛒</p>
+              <p class="text-sm font-bold text-slate-700 dark:text-slate-200">買うものはありません</p>
+              <p class="text-xs text-slate-400 mt-1">上の入力欄や「よく買うもの」から1タップで追加できます</p>
+            </div>
+          `;
+        } else {
+          const aisleOrder = ['🥬 生鮮・食材', '🧴 日用品', '☕️ 飲料・お菓子', '📦 その他'];
+          const groups = {};
+          activeItems.forEach(it => {
+            const k = it.aisle || '📦 その他';
+            if (!groups[k]) groups[k] = [];
+            groups[k].push(it);
+          });
+          const keys = [...aisleOrder.filter(k => groups[k]), ...Object.keys(groups).filter(k => !aisleOrder.includes(k))];
+
+          keys.forEach(aisle => {
+            const groupCard = document.createElement('div');
+            groupCard.className = 'bg-white dark:bg-[#15171E] rounded-3xl p-3.5 border border-black/[0.06] dark:border-white/[0.08] shadow-sm space-y-2';
+            groupCard.innerHTML = `<div class="flex items-center justify-between px-1"><h3 class="text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(aisle)}</h3><span class="text-[10px] font-bold text-slate-400">${groups[aisle].length}点</span></div>`;
+
+            const listEl = document.createElement('div');
+            listEl.className = 'space-y-1.5';
+            groups[aisle].forEach(item => {
+              const isFav = favs.some(f => f.name === item.name);
+              const row = document.createElement('div');
+              row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50';
+              row.innerHTML = `
+                <button type="button" class="shop-toggle-btn flex items-center gap-3 min-w-0 flex-1 text-left">
+                  <span class="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shrink-0"></span>
+                  <div class="min-w-0 flex-1">
+                    <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 block truncate">${escapeHtml(item.name)}</span>
+                    ${item.note ? `<span class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(item.note)}</span>` : ''}
+                  </div>
+                </button>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button type="button" class="shop-fav-btn w-8 h-8 rounded-full flex items-center justify-center text-sm transition ${isFav ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'}" title="よく買うものに登録">
+                    ${isFav ? '★' : '☆'}
+                  </button>
+                  <button type="button" class="shop-del-btn w-7 h-7 rounded-full flex items-center justify-center text-xs text-slate-400 hover:text-rose-500">✕</button>
+                </div>
+              `;
+              row.querySelector('.shop-toggle-btn').addEventListener('click', () => {
+                item.done = true;
+                saveState();
+                renderShoppingView();
+              });
+              row.querySelector('.shop-fav-btn').addEventListener('click', () => {
+                if (!Array.isArray(state.shoppingFavorites)) state.shoppingFavorites = [];
+                if (isFav) {
+                  state.shoppingFavorites = state.shoppingFavorites.filter(f => f.name !== item.name);
+                  showToast('よく買うものから外しました');
+                } else {
+                  state.shoppingFavorites.unshift({ name: item.name, aisle: item.aisle });
+                  showToast('よく買うものに登録しました');
+                }
+                saveState();
+                renderShoppingView();
+              });
+              row.querySelector('.shop-del-btn').addEventListener('click', () => {
+                state.shoppingItems = state.shoppingItems.filter(x => x.id !== item.id);
+                saveState();
+                renderShoppingView();
+              });
+              listEl.appendChild(row);
+            });
+            groupCard.appendChild(listEl);
+            activeContainer.appendChild(groupCard);
+          });
+        }
+
+        // Render Done (In Cart) Section
+        const doneSection = document.getElementById('shopping-done-section');
+        doneSection.classList.toggle('hidden', doneItems.length === 0);
+        document.getElementById('shopping-done-title').textContent = `カゴに入れたもの (${doneItems.length})`;
+        const doneList = document.getElementById('shopping-done-list');
+        doneList.innerHTML = '';
+        doneItems.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 opacity-70';
+          row.innerHTML = `
+            <button type="button" class="shop-undo-btn flex items-center gap-2.5 min-w-0 flex-1 text-left">
+              <span class="w-5 h-5 rounded-full bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center shrink-0">✓</span>
+              <span class="text-xs font-medium line-through text-slate-500 dark:text-slate-400 truncate">${escapeHtml(item.name)}</span>
+            </button>
+            <button type="button" class="shop-del-btn text-xs text-slate-400 hover:text-rose-500 px-1.5">✕</button>
+          `;
+          row.querySelector('.shop-undo-btn').addEventListener('click', () => {
+            item.done = false;
+            saveState();
+            renderShoppingView();
+          });
+          row.querySelector('.shop-del-btn').addEventListener('click', () => {
+            state.shoppingItems = state.shoppingItems.filter(x => x.id !== item.id);
+            saveState();
+            renderShoppingView();
+          });
+          doneList.appendChild(row);
+        });
+      }
+
+      document.getElementById('form-shopping-add').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const nameEl = document.getElementById('shop-input-name');
+        const noteEl = document.getElementById('shop-input-note');
+        const aisleEl = document.getElementById('shop-input-aisle');
+        addShoppingItem(nameEl.value, aisleEl.value, noteEl.value);
+        nameEl.value = '';
+        noteEl.value = '';
+        nameEl.focus();
+      });
+
+      document.getElementById('btn-shopping-clear-done').addEventListener('click', () => {
+        state.shoppingItems = (state.shoppingItems || []).filter(i => !i.done);
+        saveState();
+        renderShoppingView();
+        showToast('購入済みを削除しました');
+      });
+
       function renderAnalytics() {
         const labels = [];
         const data = [];
@@ -2220,12 +2483,15 @@
         document.getElementById('modal-task-title').textContent = task ? '予定を編集' : '新しい予定を追加';
         document.getElementById('task-id').value = task ? task.id : '';
         document.getElementById('task-title').value = task ? task.title : '';
-        document.getElementById('task-date').value = task ? task.date : selectedDate;
+        const hasDate = opts.forceDate ? true : (task ? !!task.date : true);
+        document.getElementById('task-has-date').checked = hasDate;
+        document.getElementById('task-date-fields').classList.toggle('hidden', !hasDate);
+        document.getElementById('task-date').value = (task && task.date) ? task.date : selectedDate;
         document.getElementById('task-repeat').value = task ? task.repeat : 'none';
 
         const hasTime = opts.forceTime ? true : (task ? !!task.start : true);
-        document.getElementById('task-has-time').checked = hasTime;
-        document.getElementById('task-time-fields').classList.toggle('hidden', !hasTime);
+        document.getElementById('task-has-time').checked = hasDate && hasTime;
+        document.getElementById('task-time-fields').classList.toggle('hidden', !(hasDate && hasTime));
         document.getElementById('task-start').value = opts.start || (task && task.start) || '09:00';
         document.getElementById('task-duration').value = String(opts.duration || (task && task.duration) || 30);
 
@@ -2270,6 +2536,7 @@
         document.getElementById('view-timeline').classList.toggle('hidden', tab !== 'timeline');
         document.getElementById('view-heatmap').classList.toggle('hidden', tab !== 'heatmap');
         document.getElementById('view-itsu').classList.toggle('hidden', tab !== 'itsu');
+        document.getElementById('view-shopping').classList.toggle('hidden', tab !== 'shopping');
         document.getElementById('view-analytics').classList.toggle('hidden', tab !== 'analytics');
 
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {
@@ -2291,6 +2558,8 @@
           renderHeatmapView();
         } else if (activeTab === 'itsu') {
           renderItsuView();
+        } else if (activeTab === 'shopping') {
+          renderShoppingView();
         } else {
           renderAnalytics();
         }
@@ -2360,6 +2629,7 @@
       document.getElementById('btn-primary-add').addEventListener('click', () => {
         if (activeTab === 'heatmap') openHabitModal();
         else if (activeTab === 'itsu') openItsuModal();
+        else if (activeTab === 'shopping') document.getElementById('shop-input-name').focus();
         else openTaskModal();
       });
 
@@ -2370,7 +2640,20 @@
         renderTimeline();
       });
 
+      document.getElementById('task-has-date').addEventListener('change', (e) => {
+        const hasD = e.target.checked;
+        document.getElementById('task-date-fields').classList.toggle('hidden', !hasD);
+        if (!hasD) {
+          document.getElementById('task-has-time').checked = false;
+          document.getElementById('task-time-fields').classList.add('hidden');
+        }
+      });
+
       document.getElementById('task-has-time').addEventListener('change', (e) => {
+        if (e.target.checked && !document.getElementById('task-has-date').checked) {
+          document.getElementById('task-has-date').checked = true;
+          document.getElementById('task-date-fields').classList.remove('hidden');
+        }
         document.getElementById('task-time-fields').classList.toggle('hidden', !e.target.checked);
       });
 
@@ -2391,7 +2674,8 @@
       document.getElementById('form-task').addEventListener('submit', (e) => {
         e.preventDefault();
         const id = document.getElementById('task-id').value;
-        const hasTime = document.getElementById('task-has-time').checked;
+        const hasDate = document.getElementById('task-has-date').checked;
+        const hasTime = hasDate && document.getElementById('task-has-time').checked;
         const subLines = document.getElementById('task-subtasks').value
           .split('\n').map(s => s.trim()).filter(Boolean);
 
@@ -2401,10 +2685,10 @@
           title: document.getElementById('task-title').value.trim(),
           icon: formTaskIcon,
           color: formTaskColor,
-          date: document.getElementById('task-date').value,
+          date: hasDate ? document.getElementById('task-date').value : '',
           start: hasTime ? document.getElementById('task-start').value : '',
           duration: Number(document.getElementById('task-duration').value) || 30,
-          repeat: document.getElementById('task-repeat').value,
+          repeat: hasDate ? document.getElementById('task-repeat').value : 'none',
           habitId: document.getElementById('task-habit-link').value,
           completedDates: existing ? existing.completedDates : {},
           subtasks: subLines.map((text, idx) => ({
@@ -2602,6 +2886,7 @@
           'CALSCALE:GREGORIAN'
         ];
         state.tasks.forEach(t => {
+          if (!t.date) return;
           lines.push('BEGIN:VEVENT');
           lines.push(`UID:${t.id}@chronogrid.local`);
           if (t.start) {
@@ -2894,6 +3179,9 @@
         if (data.state && Array.isArray(data.state.tasks) && Array.isArray(data.state.habits)) {
           state = data.state;
           if (!Array.isArray(state.itsuItems)) state.itsuItems = [];
+          if (!Array.isArray(state.templates)) state.templates = [];
+          if (!Array.isArray(state.shoppingItems)) state.shoppingItems = [];
+          if (!Array.isArray(state.shoppingFavorites)) state.shoppingFavorites = [];
         }
         // Merge Google Calendar events if returned
         if (Array.isArray(data.gcalEvents)) {
