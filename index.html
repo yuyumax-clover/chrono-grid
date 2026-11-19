@@ -468,7 +468,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
-            <div id="task-icon-picker" class="flex flex-wrap gap-1.5"></div>
+            <div id="task-icon-picker" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-0.5"></div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カラー</label>
@@ -508,17 +508,18 @@
             <input id="task-start" type="time" value="09:00" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">所要時間（分）</label>
-            <select id="task-duration" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
-              <option value="0">0分（単発・起床/就寝など）</option>
-              <option value="15">15分</option>
-              <option value="30" selected>30分</option>
-              <option value="45">45分</option>
-              <option value="60">1時間 (60分)</option>
-              <option value="90">1時間30分 (90分)</option>
-              <option value="120">2時間 (120分)</option>
-              <option value="180">3時間 (180分)</option>
-            </select>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">所要時間（分・0〜1440）</label>
+            <input id="task-duration" type="number" min="0" max="1440" step="5" value="30" class="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500" />
+          </div>
+          <div class="col-span-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            <button type="button" data-dur="0" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">0分(単発)</button>
+            <button type="button" data-dur="15" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">15分</button>
+            <button type="button" data-dur="30" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">30分</button>
+            <button type="button" data-dur="60" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">1時間</button>
+            <button type="button" data-dur="120" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">2時間</button>
+            <button type="button" data-dur="240" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">4時間</button>
+            <button type="button" data-dur="360" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">6時間</button>
+            <button type="button" data-dur="480" class="dur-preset-btn px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">8時間</button>
           </div>
         </div>
 
@@ -563,7 +564,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
-            <div id="habit-icon-picker" class="flex flex-wrap gap-1.5"></div>
+            <div id="habit-icon-picker" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-0.5"></div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">ヒートマップ色</label>
@@ -611,7 +612,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">アイコン</label>
-            <div id="itsu-icon-picker" class="flex flex-wrap gap-1.5"></div>
+            <div id="itsu-icon-picker" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-0.5"></div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">カラー</label>
@@ -806,10 +807,14 @@
         { id: 'slate', label: 'スレート', hex: '#64748B', bg: 'bg-slate-100 dark:bg-slate-800/70', border: 'border-slate-400', badge: 'bg-slate-600', heat: ['#f1f5f9', '#cbd5e1', '#94a3b8', '#64748b', '#475569'] }
       ];
       const ICONS = [
-        '🔬', '🎧', '📚', '💻', '🏃', '☕️', '✍️', '🧘',
-        '💧', '🗓️', '⚡', '🎯', '📝', '📊', '🧪', '🧲',
-        '📖', '🎓', '🏋️', '🚴', '🛌', '🍽️', '🧹', '🛒',
-        '🎵', '🎨', '💡', '📞', '✈️', '🚃', '🏥', '🌿'
+        '☀️', '🌙', '⏰', '🛌', '☕️', '🍵', '💧', '🍽️',
+        '🍳', '🥗', '🍱', '🍜', '🔬', '🧪', '🧲', '💻',
+        '📊', '📈', '📝', '📚', '📖', '🎓', '✍️', '🗂️',
+        '📧', '🤝', '🎤', '💡', '🎧', '🎵', '🏃', '🚶',
+        '🏋️', '🚴', '🧘', '🏊', '🩺', '💊', '🦷', '🧴',
+        '🧹', '🧺', '🛒', '🛍️', '🚿', '🛁', '✂️', '🪴',
+        '🐾', '🚃', '🚗', '✈️', '🏨', '🎬', '🎮', '🎨',
+        '📷', '📞', '🎁', '🗓️', '⚡', '🎯', '⭐', '🔥'
       ];
       const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -1423,7 +1428,8 @@
           const linkedHabit = task.habitId ? state.habits.find(h => h.id === task.habitId) : null;
           const topPx = (s - baseMins) * PX_PER_MIN + 8;
           const isPoint = dur === 0;
-          const heightPx = isPoint ? 26 : Math.max(36, dur * PX_PER_MIN - 2);
+          const maxDur = Math.max(15, endHour * 60 - s);
+          const heightPx = isPoint ? 26 : Math.max(36, Math.min(dur, maxDur) * PX_PER_MIN - 2);
           const isCompact = heightPx < 58;
 
           const widthPct = 100 / totalCols;
@@ -2674,6 +2680,12 @@
           document.getElementById('task-has-time').checked = false;
           document.getElementById('task-time-fields').classList.add('hidden');
         }
+      });
+
+      document.querySelectorAll('.dur-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById('task-duration').value = btn.dataset.dur;
+        });
       });
 
       document.getElementById('task-has-time').addEventListener('change', (e) => {
