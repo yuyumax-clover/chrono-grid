@@ -673,6 +673,10 @@
           <input id="input-gas-gcal" type="checkbox" checked class="w-3.5 h-3.5 accent-emerald-500 rounded" />
           <span>同期時にGoogleカレンダーの予定も取得する</span>
         </label>
+        <label class="flex items-center gap-2 text-[11px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input id="input-gas-autosync" type="checkbox" checked class="w-3.5 h-3.5 accent-emerald-500 rounded" />
+          <span>🔄 自動同期（起動時に読込・変更時に自動保存）</span>
+        </label>
         <div class="grid grid-cols-3 gap-1.5">
           <button id="btn-gas-save" type="button" class="px-2.5 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] font-semibold">設定保存</button>
           <button id="btn-gas-pull" type="button" class="px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold">⬇️ 読込</button>
@@ -1001,10 +1005,16 @@
         return createSeedData();
       }
 
+      let isPullingFromGas = false;
+      let autoPushTimer = null;
+
       function saveState() {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (e) {}
+        if (!isPullingFromGas && typeof scheduleAutoPush === 'function') {
+          scheduleAutoPush();
+        }
       }
 
       let state = loadState();
@@ -3121,9 +3131,13 @@
       function loadGasConfig() {
         try {
           const raw = localStorage.getItem(GAS_CONFIG_KEY);
-          if (raw) return JSON.parse(raw);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.autoSync !== 'boolean') parsed.autoSync = true;
+            return parsed;
+          }
         } catch (e) {}
-        return { url: '', token: '', syncGcal: true };
+        return { url: '', token: '', syncGcal: true, autoSync: true };
       }
 
       function saveGasConfig(cfg) {
@@ -3139,6 +3153,7 @@
         document.getElementById('input-gas-url').value = gasConfig.url || '';
         document.getElementById('input-gas-token').value = gasConfig.token || '';
         document.getElementById('input-gas-gcal').checked = gasConfig.syncGcal !== false;
+        document.getElementById('input-gas-autosync').checked = gasConfig.autoSync !== false;
         document.getElementById('btn-quick-sync').classList.toggle('hidden', !configured);
         const badge = document.getElementById('gas-status-badge');
         badge.textContent = configured ? '設定済み' : '未設定';
@@ -3168,53 +3183,79 @@
         }
       }
 
-      async function pullFromGas() {
-        showToast('クラウドから読み込み中...');
+      let lastPullAt = 0;
+
+      function setSyncSpinning(spinning) {
+        const btn = document.getElementById('btn-quick-sync');
+        if (btn) btn.classList.toggle('animate-spin', spinning);
+      }
+
+      function scheduleAutoPush() {
+        if (!gasConfig.url || !gasConfig.token || gasConfig.autoSync === false) return;
+        clearTimeout(autoPushTimer);
+        autoPushTimer = setTimeout(() => {
+          pushToGas({ silent: true });
+        }, 1500);
+      }
+
+      async function pullFromGas(opts = {}) {
+        const silent = !!opts.silent;
+        if (!silent) showToast('クラウドから読み込み中...');
+        setSyncSpinning(true);
         const data = await callGas('pull', {
           syncGcal: gasConfig.syncGcal !== false,
           startDate: addDays(TODAY_STR, -14),
           endDate: addDays(TODAY_STR, 45)
         });
+        setSyncSpinning(false);
         if (!data) return;
-        if (data.state && Array.isArray(data.state.tasks) && Array.isArray(data.state.habits)) {
-          state = data.state;
-          if (!Array.isArray(state.itsuItems)) state.itsuItems = [];
-          if (!Array.isArray(state.templates)) state.templates = [];
-          if (!Array.isArray(state.shoppingItems)) state.shoppingItems = [];
-          if (!Array.isArray(state.shoppingFavorites)) state.shoppingFavorites = [];
+        lastPullAt = Date.now();
+        isPullingFromGas = true;
+        try {
+          if (data.state && Array.isArray(data.state.tasks) && Array.isArray(data.state.habits)) {
+            state = data.state;
+            if (!Array.isArray(state.itsuItems)) state.itsuItems = [];
+            if (!Array.isArray(state.templates)) state.templates = [];
+            if (!Array.isArray(state.shoppingItems)) state.shoppingItems = [];
+            if (!Array.isArray(state.shoppingFavorites)) state.shoppingFavorites = [];
+          }
+          if (Array.isArray(data.gcalEvents)) {
+            const nonGcalTasks = state.tasks.filter(t => !t.gcalId);
+            const existingMap = new Map(state.tasks.filter(t => t.gcalId).map(t => [t.gcalId, t]));
+            const gcalTasks = data.gcalEvents.map((ev, idx) => {
+              const prev = existingMap.get(ev.id);
+              return {
+                id: prev ? prev.id : 'gcal_' + idx + '_' + Date.now(),
+                gcalId: ev.id,
+                title: ev.title || '(無題)',
+                icon: prev ? prev.icon : '📅',
+                color: ev.color || (prev ? prev.color : 'sky'),
+                date: ev.date,
+                start: ev.start || '',
+                duration: ev.duration || 60,
+                repeat: 'none',
+                habitId: prev ? prev.habitId : '',
+                completedDates: prev ? prev.completedDates : {},
+                subtasks: prev ? prev.subtasks : []
+              };
+            });
+            state.tasks = [...nonGcalTasks, ...gcalTasks];
+          }
+          saveState();
+          renderAll();
+          if (!silent) showToast('クラウド＆Gカレンダーと同期しました');
+        } finally {
+          isPullingFromGas = false;
         }
-        // Merge Google Calendar events if returned
-        if (Array.isArray(data.gcalEvents)) {
-          const nonGcalTasks = state.tasks.filter(t => !t.gcalId);
-          const existingMap = new Map(state.tasks.filter(t => t.gcalId).map(t => [t.gcalId, t]));
-          const gcalTasks = data.gcalEvents.map((ev, idx) => {
-            const prev = existingMap.get(ev.id);
-            return {
-              id: prev ? prev.id : 'gcal_' + idx + '_' + Date.now(),
-              gcalId: ev.id,
-              title: ev.title || '(無題)',
-              icon: prev ? prev.icon : '📅',
-              color: ev.color || (prev ? prev.color : 'sky'),
-              date: ev.date,
-              start: ev.start || '',
-              duration: ev.duration || 60,
-              repeat: 'none',
-              habitId: prev ? prev.habitId : '',
-              completedDates: prev ? prev.completedDates : {},
-              subtasks: prev ? prev.subtasks : []
-            };
-          });
-          state.tasks = [...nonGcalTasks, ...gcalTasks];
-        }
-        saveState();
-        renderAll();
-        showToast('クラウド＆Gカレンダーと同期しました');
       }
 
-      async function pushToGas() {
-        showToast('クラウドへ保存中...');
+      async function pushToGas(opts = {}) {
+        const silent = !!opts.silent;
+        if (!silent) showToast('クラウドへ保存中...');
+        setSyncSpinning(true);
         const res = await callGas('push', { payload: state });
-        if (res && res.ok) {
+        setSyncSpinning(false);
+        if (res && res.ok && !silent) {
           showToast('クラウドへ保存しました');
         }
       }
@@ -3223,16 +3264,25 @@
         gasConfig = {
           url: document.getElementById('input-gas-url').value.trim(),
           token: document.getElementById('input-gas-token').value.trim(),
-          syncGcal: document.getElementById('input-gas-gcal').checked
+          syncGcal: document.getElementById('input-gas-gcal').checked,
+          autoSync: document.getElementById('input-gas-autosync').checked
         };
         saveGasConfig(gasConfig);
         updateGasUI();
         showToast('GAS設定を保存しました');
       });
 
-      document.getElementById('btn-gas-pull').addEventListener('click', pullFromGas);
-      document.getElementById('btn-gas-push').addEventListener('click', pushToGas);
-      document.getElementById('btn-quick-sync').addEventListener('click', pullFromGas);
+      document.getElementById('btn-gas-pull').addEventListener('click', () => pullFromGas({ silent: false }));
+      document.getElementById('btn-gas-push').addEventListener('click', () => pushToGas({ silent: false }));
+      document.getElementById('btn-quick-sync').addEventListener('click', () => pullFromGas({ silent: false }));
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && gasConfig.url && gasConfig.token && gasConfig.autoSync !== false) {
+          if (Date.now() - lastPullAt > 30000) {
+            pullFromGas({ silent: true });
+          }
+        }
+      });
 
       // ================= 1-DAY TEMPLATES =================
       function renderTemplateList() {
@@ -3347,6 +3397,9 @@
         showLockScreen();
       }
       renderAll();
+      if (gasConfig.url && gasConfig.token && gasConfig.autoSync !== false) {
+        pullFromGas({ silent: true });
+      }
     })();
   </script>
 </body>
